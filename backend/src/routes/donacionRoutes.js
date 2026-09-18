@@ -1,5 +1,6 @@
 const express = require("express");
 const verificarToken = require("../middleware/authMiddleware");
+const permitirRoles = require("../middleware/roleMiddleware");
 
 const {
     obtenerTiposDonacion,
@@ -26,6 +27,7 @@ router.post(
 router.get(
     "/",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria","Contador"),
     listarDonaciones
 );
 router.post(
@@ -40,12 +42,14 @@ router.post(
 router.get(
     "/:id",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria","Contador"),
     obtenerDonacion
 );
 
 router.put(
     "/:id/estado",
     verificarToken,
+    permitirRoles("Administrador","Contador"),
     actualizarEstadoDonacion
 );
 

@@ -4,6 +4,10 @@ const verificarToken = require(
     "../middleware/authMiddleware"
 );
 
+const permitirRoles = require(
+    "../middleware/roleMiddleware"
+);
+
 const {
     listarNecesidades,
     obtenerNecesidad,
@@ -21,18 +25,21 @@ router.get("/:id", obtenerNecesidad);
 router.post(
     "/",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     crearNecesidad
 );
 
 router.put(
     "/:id",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     actualizarNecesidad
 );
 
 router.delete(
     "/:id",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     eliminarNecesidad
 );
 

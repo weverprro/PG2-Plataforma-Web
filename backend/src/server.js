@@ -10,6 +10,7 @@ const contenidoRoutes = require("./routes/contenidoRoutes");
 const visitaRoutes = require("./routes/visitaRoutes");
 const voluntariadoRoutes = require("./routes/voluntariadoRoutes");
 const donacionRoutes = require("./routes/donacionRoutes");
+const usuarioRoutes = require("./routes/usuarioRoutes");
 
 app.use(cors());
 app.use(express.json());
@@ -19,6 +20,7 @@ app.use("/api/contenidos", contenidoRoutes);
 app.use("/api/donaciones", donacionRoutes);
 app.use("/api/visitas", visitaRoutes);
 app.use("/api/voluntariado", voluntariadoRoutes);
+app.use("/api/usuarios", usuarioRoutes);
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {

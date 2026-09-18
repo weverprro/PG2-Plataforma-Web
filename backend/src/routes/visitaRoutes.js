@@ -1,5 +1,6 @@
 const express = require("express");
 const verificarToken = require("../middleware/authMiddleware");
+const permitirRoles = require("../middleware/roleMiddleware");
 
 const {
     listarDisponibilidades,
@@ -20,12 +21,14 @@ router.get(
 router.post(
     "/disponibilidades",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     crearDisponibilidad
 );
 
 router.put(
     "/disponibilidades/:id",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     actualizarDisponibilidad
 );
 
@@ -37,12 +40,14 @@ router.post(
 router.get(
     "/solicitudes",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     listarSolicitudesVisita
 );
 
 router.put(
     "/solicitudes/:id/estado",
     verificarToken,
+    permitirRoles("Administrador", "Secretaria"),
     actualizarEstadoSolicitud
 );
 

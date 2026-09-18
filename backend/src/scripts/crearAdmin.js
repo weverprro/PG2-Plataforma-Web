@@ -9,7 +9,7 @@ const { enviarCorreoVerificacion } = require("../services/emailService");
 async function crearAdministrador() {
     try {
         const nombre = "Administrador Principal";
-        const correo = "luisfearre13@gmail.com";
+        const correo = "luisfearre14@gmail.com";
         const contrasena = "Cambiar123!";
 
         const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
