@@ -122,8 +122,36 @@ async function capturarOrdenPaypal(idOrden) {
     return datos;
 }
 
+async function obtenerOrdenPaypal(idOrden) {
+    const accessToken = await obtenerAccessToken();
+
+    const respuesta = await fetch(
+        `${process.env.PAYPAL_BASE_URL}/v2/checkout/orders/${idOrden}`,
+        {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok) {
+        console.error("Error PayPal:", datos);
+
+        throw new Error(
+            "No fue posible consultar la orden de PayPal."
+        );
+    }
+
+    return datos;
+}
+
 module.exports = {
     obtenerAccessToken,
     crearOrdenPaypal,
+    obtenerOrdenPaypal,
     capturarOrdenPaypal
 };

@@ -1,5 +1,9 @@
 const pool = require("../config/database");
-const {crearOrdenPaypal,capturarOrdenPaypal} = require("../services/paypalService");
+const {
+    crearOrdenPaypal,
+    obtenerOrdenPaypal,
+    capturarOrdenPaypal
+} = require("../services/paypalService");
 
 async function obtenerTiposDonacion(req, res) {
     res.json([
@@ -270,24 +274,63 @@ async function crearOrdenPago(req, res) {
             });
         }
 
-        const [transacciones] = await pool.execute(
-            `SELECT id_transaccion
-             FROM transaccion_pago
-             WHERE id_donacion = ?
-             LIMIT 1`,
-            [id]
-        );
-
-        if (transacciones.length > 0) {
-            return res.status(400).json({
-                mensaje: "Esta donación ya tiene una transacción asociada."
-            });
-        }
-
         const orden = await crearOrdenPaypal(
             donacion.monto,
             donacion.id_donacion
         );
+
+        const [transaccionesExistentes] = await pool.execute(
+            `SELECT
+                id_transaccion,
+                estado
+            FROM transaccion_pago
+            WHERE id_donacion = ?
+            LIMIT 1`,
+            [id]
+        );
+
+        if (transaccionesExistentes.length > 0) {
+
+            await pool.execute(
+                `UPDATE transaccion_pago
+                SET orden_externa = ?,
+                    referencia_externa = NULL,
+                    proveedor = 'PayPal',
+                    estado = ?,
+                    monto = ?,
+                    moneda = 'USD',
+                    fecha = CURRENT_TIMESTAMP
+                WHERE id_donacion = ?`,
+                [
+                    orden.id,
+                    orden.status,
+                    Number(donacion.monto).toFixed(2),
+                    id
+                ]
+            );
+
+        } else {
+
+            await pool.execute(
+                `INSERT INTO transaccion_pago
+                (
+                    orden_externa,
+                    referencia_externa,
+                    proveedor,
+                    estado,
+                    monto,
+                    moneda,
+                    id_donacion
+                )
+                VALUES (?, NULL, 'PayPal', ?, ?, 'USD', ?)`,
+                [
+                    orden.id,
+                    orden.status,
+                    Number(donacion.monto).toFixed(2),
+                    id
+                ]
+            );
+        }
 
         console.log(
             "Respuesta completa de PayPal:",
@@ -324,75 +367,192 @@ async function capturarOrdenPago(req, res) {
 
     try {
         const { id } = req.params;
-        const { idOrden } = req.body;
 
-        if (!idOrden) {
-            return res.status(400).json({
-                mensaje: "El ID de la orden de PayPal es obligatorio."
-            });
-        }
-
-        const [donaciones] = await conexion.execute(
+        const [registros] = await conexion.execute(
             `SELECT
-                id_donacion,
-                tipo_donacion,
-                monto,
-                estado
-             FROM donacion
-             WHERE id_donacion = ?
+                d.id_donacion,
+                d.tipo_donacion,
+                d.monto,
+                d.estado,
+
+                tp.id_transaccion,
+                tp.orden_externa,
+                tp.estado AS estado_transaccion
+
+             FROM donacion d
+
+             LEFT JOIN transaccion_pago tp
+                ON d.id_donacion = tp.id_donacion
+
+             WHERE d.id_donacion = ?
              LIMIT 1`,
             [id]
         );
 
-        if (donaciones.length === 0) {
+        if (registros.length === 0) {
             return res.status(404).json({
                 mensaje: "Donación no encontrada."
             });
         }
 
-        const donacion = donaciones[0];
+        const donacion = registros[0];
 
         if (donacion.tipo_donacion !== "Monetaria") {
             return res.status(400).json({
-                mensaje: "Esta donación no corresponde a un pago electrónico."
+                mensaje:
+                    "Esta donación no corresponde a un pago electrónico."
             });
         }
 
-        const captura = await capturarOrdenPaypal(idOrden);
+        if (!donacion.id_transaccion ||
+            !donacion.orden_externa) {
+
+            return res.status(400).json({
+                mensaje:
+                    "La donación no tiene una orden de PayPal asociada."
+            });
+        }
+
+        if (donacion.estado === "Confirmada" ||
+            donacion.estado_transaccion === "COMPLETED") {
+
+            return res.status(409).json({
+                mensaje:
+                    "Esta donación ya fue procesada anteriormente."
+            });
+        }
+
+        /*
+         * Consultamos PayPal ANTES de capturar.
+         */
+        const ordenPaypal = await obtenerOrdenPaypal(
+            donacion.orden_externa
+        );
+
+        const unidadCompra =
+            ordenPaypal.purchase_units?.[0];
+
+        if (!unidadCompra) {
+            return res.status(400).json({
+                mensaje:
+                    "PayPal no devolvió los datos de la orden."
+            });
+        }
+
+        /*
+         * 1. Comprobar que la orden corresponde
+         *    a esta donación.
+         */
+        if (
+            String(unidadCompra.reference_id) !==
+            String(donacion.id_donacion)
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "La orden de PayPal no corresponde a esta donación."
+            });
+        }
+
+        /*
+         * 2. Comprobar moneda.
+         */
+        if (
+            unidadCompra.amount?.currency_code !== "USD"
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "La moneda de la orden de PayPal no es válida."
+            });
+        }
+
+        /*
+         * 3. Comprobar monto.
+         */
+        const montoBaseDatos =
+            Number(donacion.monto).toFixed(2);
+
+        const montoPaypal =
+            Number(
+                unidadCompra.amount?.value
+            ).toFixed(2);
+
+        if (montoBaseDatos !== montoPaypal) {
+            return res.status(400).json({
+                mensaje:
+                    "El monto de PayPal no coincide con la donación registrada."
+            });
+        }
+
+        /*
+         * 4. Debe haber sido aprobada por el pagador.
+         */
+        if (ordenPaypal.status !== "APPROVED") {
+            return res.status(400).json({
+                mensaje:
+                    "La orden todavía no ha sido aprobada en PayPal.",
+                estadoPaypal: ordenPaypal.status
+            });
+        }
+
+        /*
+         * Después de todas las comprobaciones,
+         * hacemos la captura.
+         */
+        const captura =
+            await capturarOrdenPaypal(
+                donacion.orden_externa
+            );
 
         if (captura.status !== "COMPLETED") {
             return res.status(400).json({
-                mensaje: "La orden no fue completada por PayPal."
+                mensaje:
+                    "PayPal no completó la operación.",
+                estadoPaypal: captura.status
             });
         }
 
         const capturaPago =
-            captura.purchase_units?.[0]?.payments?.captures?.[0];
+            captura.purchase_units?.[0]
+                ?.payments
+                ?.captures?.[0];
 
         if (!capturaPago) {
             return res.status(400).json({
-                mensaje: "PayPal no devolvió información de la captura."
+                mensaje:
+                    "PayPal no devolvió información de la captura."
+            });
+        }
+
+        /*
+         * Verificación final de monto y moneda.
+         */
+        if (
+            capturaPago.amount.currency_code !== "USD" ||
+            Number(
+                capturaPago.amount.value
+            ).toFixed(2) !== montoBaseDatos
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "Los datos de la captura no coinciden con la donación."
             });
         }
 
         await conexion.beginTransaction();
 
         await conexion.execute(
-            `INSERT INTO transaccion_pago
-            (
-                referencia_externa,
-                proveedor,
-                estado,
-                monto,
-                id_donacion
-            )
-            VALUES (?, ?, ?, ?, ?)`,
+            `UPDATE transaccion_pago
+             SET referencia_externa = ?,
+                 estado = ?,
+                 monto = ?,
+                 moneda = ?
+             WHERE id_transaccion = ?`,
             [
                 capturaPago.id,
-                "PayPal",
                 capturaPago.status,
                 capturaPago.amount.value,
-                id
+                capturaPago.amount.currency_code,
+                donacion.id_transaccion
             ]
         );
 
@@ -406,14 +566,18 @@ async function capturarOrdenPago(req, res) {
         await conexion.commit();
 
         res.json({
-            mensaje: "Donación confirmada correctamente.",
+            mensaje:
+                "Donación confirmada correctamente.",
             idDonacion: Number(id),
             idOrden: captura.id,
             referenciaPago: capturaPago.id,
+            monto: capturaPago.amount.value,
+            moneda: capturaPago.amount.currency_code,
             estado: captura.status
         });
 
     } catch (error) {
+
         try {
             await conexion.rollback();
         } catch (_) {}
@@ -424,7 +588,8 @@ async function capturarOrdenPago(req, res) {
         );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al capturar la orden de PayPal."
+            mensaje:
+                "Ocurrió un error al capturar la orden de PayPal."
         });
 
     } finally {
