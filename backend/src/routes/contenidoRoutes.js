@@ -1,20 +1,78 @@
 const express = require("express");
-const verificarToken = require("../middleware/authMiddleware");
-const permitirRoles = require("../middleware/roleMiddleware");
-
-const {
-    listarContenidos,
-    obtenerContenido,
-    crearContenido,
-    actualizarContenido,
-    eliminarContenido
-} = require("../controllers/contenidoController");
 
 const router = express.Router();
 
-router.get("/", listarContenidos);
+const {
+    listarContenidos,
+    obtenerContenidoPorId,
+    obtenerContenidoPorTipo,
+    listarContenidosAdmin,
+    crearContenido,
+    actualizarContenido,
+    cambiarEstadoContenido,
+    eliminarContenido
+} = require("../controllers/contenidoController");
 
-router.get("/:id", obtenerContenido);
+const authMiddleware =require("../middleware/authMiddleware");
+
+const verificarToken =require("../middleware/authMiddleware");
+
+const permitirRoles =require("../middleware/roleMiddleware");
+
+const {subirImagenContenido} = require("../controllers/imagenController");
+
+const {subirImagenContenido:middlewareImagenContenido} = require("../middleware/uploadContenido");
+
+/*
+=========================================
+Subir imagen de contenido
+=========================================
+*/
+router.post(
+    "/subir-imagen",
+
+    authMiddleware,
+
+    permitirRoles(
+        "Administrador"
+    ),
+
+    middlewareImagenContenido,
+
+    subirImagenContenido
+);
+
+/*
+=========================================
+PUBLICO
+=========================================
+*/
+
+router.get(
+    "/",
+    listarContenidos
+);
+
+
+router.get(
+    "/tipo/:tipo",
+    obtenerContenidoPorTipo
+);
+
+
+/*
+=========================================
+ADMINISTRADOR
+=========================================
+*/
+
+router.get(
+    "/admin/listado",
+    verificarToken,
+    permitirRoles("Administrador"),
+    listarContenidosAdmin
+);
+
 
 router.post(
     "/",
@@ -23,6 +81,15 @@ router.post(
     crearContenido
 );
 
+
+router.put(
+    "/:id/estado",
+    verificarToken,
+    permitirRoles("Administrador"),
+    cambiarEstadoContenido
+);
+
+
 router.put(
     "/:id",
     verificarToken,
@@ -30,11 +97,25 @@ router.put(
     actualizarContenido
 );
 
+
 router.delete(
     "/:id",
     verificarToken,
     permitirRoles("Administrador"),
     eliminarContenido
 );
+
+
+/*
+=========================================
+Debe quedar al final.
+=========================================
+*/
+
+router.get(
+    "/:id",
+    obtenerContenidoPorId
+);
+
 
 module.exports = router;

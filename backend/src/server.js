@@ -11,6 +11,22 @@ const visitaRoutes = require("./routes/visitaRoutes");
 const voluntariadoRoutes = require("./routes/voluntariadoRoutes");
 const donacionRoutes = require("./routes/donacionRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");
+const publicacionRoutes = require("./routes/publicacionRoutes");
+const path = require("path");
+const transaccionRoutes = require("./routes/transaccionRoutes");
+const rolRoutes =require("./routes/rolRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const contactoRoutes = require("./routes/contactoRoutes");
+
+app.use(
+    "/uploads",
+    express.static(
+        path.join(
+            __dirname,
+            "../uploads"
+        )
+    )
+);
 
 app.use(cors());
 app.use(express.json());
@@ -21,6 +37,12 @@ app.use("/api/donaciones", donacionRoutes);
 app.use("/api/visitas", visitaRoutes);
 app.use("/api/voluntariado", voluntariadoRoutes);
 app.use("/api/usuarios", usuarioRoutes);
+app.use("/api/publicaciones", publicacionRoutes);
+app.use("/api/transacciones", transaccionRoutes);
+app.use("/api/roles", rolRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/contacto", contactoRoutes);
+
 const PORT = process.env.PORT || 3000;
 
 app.get("/", (req, res) => {

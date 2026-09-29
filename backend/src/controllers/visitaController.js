@@ -1,5 +1,7 @@
 const pool = require("../config/database");
 
+const {enviarCorreo} = require("../services/emailService");
+
 async function listarDisponibilidades(req, res) {
     try {
         const [disponibilidades] = await pool.execute(
@@ -210,7 +212,7 @@ async function crearSolicitudVisita(req, res) {
         );
 
         res.status(201).json({
-            mensaje: "Solicitud de visita enviada correctamente.",
+            mensaje: "Solicitud de visita enviada correctamente. Queda pendiente de aprobación. Nos comunicaremos contigo por correo electrónico o llamada telefónica para confirmar la visita.",
             idSolicitud: resultado.insertId
         });
 
@@ -375,11 +377,185 @@ async function actualizarEstadoSolicitud(req, res) {
 
         await conexion.commit();
 
-        res.json({
-            mensaje: "Estado de la solicitud actualizado correctamente."
-        });
+        await conexion.commit();
 
-    } catch (error) {
+
+        let correoEnviado = false;
+
+
+        try {
+
+            const [datosSolicitud] =
+                await conexion.execute(
+                    `SELECT
+                        sv.nombre_visitante,
+                        sv.correo_visitante,
+                        sv.telefono,
+                        sv.cantidad_personas,
+                        sv.estado,
+
+                        DATE_FORMAT(
+                            dv.fecha,
+                            '%d/%m/%Y'
+                        ) AS fecha_visita,
+
+                        TIME_FORMAT(
+                            dv.hora_inicio,
+                            '%H:%i'
+                        ) AS hora_inicio,
+
+                        TIME_FORMAT(
+                            dv.hora_fin,
+                            '%H:%i'
+                        ) AS hora_fin
+
+                    FROM solicitud_visita sv
+
+                    INNER JOIN disponibilidad_visita dv
+                        ON dv.id_disponibilidad =
+                        sv.id_disponibilidad
+
+                    WHERE sv.id_solicitud = ?
+
+                    LIMIT 1`,
+                    [
+                        id
+                    ]
+                );
+
+
+            const solicitud =
+                datosSolicitud[0];
+
+
+            if (
+                solicitud &&
+                solicitud.correo_visitante
+            ) {
+
+                let asunto = "";
+                let texto = "";
+
+
+                if (
+                    estado === "Aprobada"
+                ) {
+
+                    asunto =
+                        "Solicitud de visita aprobada";
+
+
+                    texto =
+        `Hola ${solicitud.nombre_visitante},
+
+        Tu solicitud de visita al Mesón Buen Samaritano ha sido aprobada.
+
+        Fecha: ${solicitud.fecha_visita}
+        Horario: ${solicitud.hora_inicio} - ${solicitud.hora_fin}
+        Cantidad de personas: ${solicitud.cantidad_personas}
+
+        Tu visita queda confirmada para la fecha y horario indicados.
+
+        Si es necesario, personal del hogar podrá comunicarse contigo por teléfono.
+
+        Mesón Buen Samaritano`;
+
+                } else if (
+                    estado === "Rechazada"
+                ) {
+
+                    asunto =
+                        "Actualización de solicitud de visita";
+
+
+                    texto =
+        `Hola ${solicitud.nombre_visitante},
+
+        Te informamos que tu solicitud de visita al Mesón Buen Samaritano no pudo ser aprobada.
+
+        Puedes consultar nuevamente los horarios disponibles y realizar otra solicitud.
+
+        Gracias por tu comprensión.
+
+        Mesón Buen Samaritano`;
+
+                } else if (
+                    estado === "Cancelada"
+                ) {
+
+                    asunto =
+                        "Visita cancelada";
+
+
+                    texto =
+        `Hola ${solicitud.nombre_visitante},
+
+        Te informamos que la visita programada para el ${solicitud.fecha_visita}, de ${solicitud.hora_inicio} a ${solicitud.hora_fin}, ha sido cancelada.
+
+        Si deseas realizar una nueva visita, puedes consultar nuevamente los horarios disponibles.
+
+        Mesón Buen Samaritano`;
+
+                }
+
+
+                if (
+                    asunto &&
+                    texto
+                ) {
+
+                    console.log(
+                        "Intentando enviar correo de visita a:",
+                        solicitud.correo_visitante
+                    );
+
+
+                    await enviarCorreo({
+                        para:
+                            solicitud.correo_visitante,
+
+                        asunto,
+
+                        texto
+                    });
+
+
+                    correoEnviado = true;
+
+
+                    console.log(
+                        "Correo de visita enviado correctamente a:",
+                        solicitud.correo_visitante
+                    );
+
+                }
+
+            }
+
+        } catch (errorCorreo) {
+
+            console.error(
+                "ERROR AL ENVIAR CORREO DE VISITA:"
+            );
+
+            console.error(
+                errorCorreo
+            );
+
+        }
+
+
+        return res.json({
+
+            mensaje:
+                correoEnviado
+                    ? `Solicitud ${estado.toLowerCase()} correctamente. Se envió una notificación por correo electrónico.`
+                    : `Solicitud ${estado.toLowerCase()} correctamente, pero no fue posible enviar la notificación por correo electrónico.`,
+
+            correoEnviado
+
+        });
+        } catch (error) {
         await conexion.rollback();
 
         console.error(

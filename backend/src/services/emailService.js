@@ -47,6 +47,34 @@ async function enviarCorreoVerificacion(correo, token) {
     });
 }
 
+async function enviarCorreo({
+    para,
+    asunto,
+    texto
+}) {
+
+    const info =
+        await transporter.sendMail({
+
+            from:
+                process.env.SMTP_USER,
+
+            to:
+                para,
+
+            subject:
+                asunto,
+
+            text:
+                texto
+
+        });
+
+
+    return info;
+}
+
 module.exports = {
-    enviarCorreoVerificacion
+    enviarCorreoVerificacion,
+    enviarCorreo
 };

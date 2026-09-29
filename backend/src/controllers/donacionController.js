@@ -5,6 +5,12 @@ const {
     capturarOrdenPaypal
 } = require("../services/paypalService");
 
+const {
+    enviarCorreo
+} = require(
+    "../services/emailService"
+);
+
 async function obtenerTiposDonacion(req, res) {
     res.json([
         {
@@ -19,99 +25,330 @@ async function obtenerTiposDonacion(req, res) {
 }
 
 async function crearDonacion(req, res) {
+
     try {
+
         const {
             nombreDonante,
             correoDonante,
+            telefonoDonante,
             tipoDonacion,
             monto,
             descripcion
         } = req.body;
+
 
         const tiposPermitidos = [
             "Monetaria",
             "Especie"
         ];
 
+
+        /*
+         * ==========================
+         * VALIDACIONES GENERALES
+         * ==========================
+         */
+
         if (!tipoDonacion) {
+
             return res.status(400).json({
-                mensaje: "El tipo de donación es obligatorio."
+                mensaje:
+                    "El tipo de donación es obligatorio."
             });
+
         }
 
-        if (!tiposPermitidos.includes(tipoDonacion)) {
-            return res.status(400).json({
-                mensaje: "Tipo de donación no válido."
-            });
-        }
-
-        if (correoDonante) {
-            const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-            if (!correoValido.test(correoDonante)) {
-                return res.status(400).json({
-                    mensaje: "El correo electrónico no tiene un formato válido."
-                });
-            }
-        }
-
-        if (tipoDonacion === "Monetaria") {
-            if (!monto || Number(monto) <= 0) {
-                return res.status(400).json({
-                    mensaje: "Las donaciones monetarias requieren un monto mayor que cero."
-                });
-            }
-        }
 
         if (
-            tipoDonacion === "Especie" &&
-            !descripcion
+            !tiposPermitidos.includes(
+                tipoDonacion
+            )
         ) {
+
             return res.status(400).json({
-                mensaje: "Las donaciones en especie requieren una descripción."
+                mensaje:
+                    "Tipo de donación no válido."
             });
+
         }
 
-        const [resultado] = await pool.execute(
-            `INSERT INTO donacion
-            (
-                nombre_donante,
-                correo_donante,
-                tipo_donacion,
-                monto,
-                descripcion,
-                estado
-            )
-            VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-                nombreDonante || null,
-                correoDonante || null,
-                tipoDonacion,
-                tipoDonacion === "Monetaria"
-                    ? monto
-                    : null,
-                descripcion || null,
-                "Pendiente"
-            ]
-        );
 
-        res.status(201).json({
-            mensaje: "Donación registrada correctamente.",
-            idDonacion: resultado.insertId,
-            requierePago:
-                tipoDonacion === "Monetaria"
-        });
+        /*
+         * Validar correo únicamente
+         * si el donante lo proporciona.
+         */
+        if (correoDonante) {
+
+            const correoValido =
+                /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
+            if (
+                !correoValido.test(
+                    correoDonante
+                )
+            ) {
+
+                return res.status(400).json({
+                    mensaje:
+                        "El correo electrónico no tiene un formato válido."
+                });
+
+            }
+
+        }
+
+
+        /*
+         * ==========================
+         * DONACIÓN MONETARIA
+         * ==========================
+         */
+
+        if (
+            tipoDonacion ===
+            "Monetaria"
+        ) {
+
+            if (
+                !monto ||
+                Number(monto) <= 0
+            ) {
+
+                return res.status(400).json({
+                    mensaje:
+                        "Las donaciones monetarias requieren un monto mayor que cero."
+                });
+
+            }
+
+        }
+
+
+        /*
+         * ==========================
+         * DONACIÓN EN ESPECIE
+         * ==========================
+         */
+
+        if (
+            tipoDonacion ===
+                "Especie" &&
+            !telefonoDonante
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "El teléfono es obligatorio para coordinar una donación en especie."
+            });
+
+        }
+
+
+        if (
+            tipoDonacion ===
+                "Especie" &&
+            !descripcion
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "Debes indicar qué deseas donar."
+            });
+
+        }
+
+
+        /*
+         * ==========================
+         * REGISTRAR DONACIÓN
+         * ==========================
+         */
+
+        const [resultado] =
+            await pool.execute(
+                `INSERT INTO donacion
+                (
+                    nombre_donante,
+                    correo_donante,
+                    telefono_donante,
+                    tipo_donacion,
+                    monto,
+                    descripcion,
+                    estado
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    nombreDonante ||
+                        null,
+
+                    correoDonante ||
+                        null,
+
+                    telefonoDonante ||
+                        null,
+
+                    tipoDonacion,
+
+                    tipoDonacion ===
+                        "Monetaria"
+                        ? Number(monto)
+                        : null,
+
+                    descripcion ||
+                        null,
+
+                    "Pendiente"
+                ]
+            );
+
+
+        /*
+         * ==========================
+         * CORREO PARA DONACIÓN
+         * EN ESPECIE
+         * ==========================
+         */
+
+        let correoEnviado = false;
+
+
+        if (
+            tipoDonacion ===
+                "Especie" &&
+            correoDonante
+        ) {
+
+            try {
+
+                await enviarCorreo({
+
+                    para:
+                        correoDonante,
+
+                    asunto:
+                        "Donación en especie registrada",
+
+                    texto:
+`Hola ${nombreDonante || "donante"},
+
+Hemos recibido tu intención de realizar una donación en especie al Mesón Buen Samaritano.
+
+Donación ofrecida:
+${descripcion}
+
+Tu donación ha quedado registrada como pendiente.
+
+Personal del hogar podrá comunicarse contigo al teléfono ${telefonoDonante} para coordinar la forma y fecha de entrega.
+
+Gracias por apoyar a nuestros adultos mayores.
+
+Mesón Buen Samaritano`
+
+                });
+
+
+                correoEnviado = true;
+
+
+                console.log(
+                    "Correo de donación en especie enviado a:",
+                    correoDonante
+                );
+
+
+            } catch (errorCorreo) {
+
+                console.error(
+                    "La donación fue registrada, pero no se pudo enviar el correo:"
+                );
+
+                console.error(
+                    errorCorreo
+                );
+
+            }
+
+        }
+
+
+        /*
+         * ==========================
+         * RESPUESTA DONACIÓN
+         * EN ESPECIE
+         * ==========================
+         */
+
+        if (
+            tipoDonacion ===
+            "Especie"
+        ) {
+
+            return res
+                .status(201)
+                .json({
+
+                    mensaje:
+                        correoDonante
+                            ? correoEnviado
+                                ? "Donación en especie registrada correctamente. Te enviamos un correo de confirmación. Personal del hogar se comunicará contigo para coordinar la entrega."
+                                : "Donación en especie registrada correctamente. Personal del hogar se comunicará contigo para coordinar la entrega, aunque no fue posible enviar el correo de confirmación."
+                            : "Donación en especie registrada correctamente. Personal del hogar se comunicará contigo para coordinar la entrega.",
+
+                    idDonacion:
+                        resultado.insertId,
+
+                    requierePago:
+                        false,
+
+                    correoEnviado
+
+                });
+
+        }
+
+
+        /*
+         * ==========================
+         * RESPUESTA DONACIÓN
+         * MONETARIA
+         * ==========================
+         */
+
+        return res
+            .status(201)
+            .json({
+
+                mensaje:
+                    "Donación registrada correctamente.",
+
+                idDonacion:
+                    resultado.insertId,
+
+                requierePago:
+                    true
+
+            });
+
 
     } catch (error) {
+
         console.error(
             "Error al registrar donación:",
             error.message
         );
 
-        res.status(500).json({
-            mensaje: "Ocurrió un error al registrar la donación."
-        });
+
+        return res
+            .status(500)
+            .json({
+                mensaje:
+                    "Ocurrió un error al registrar la donación."
+            });
+
     }
+
 }
 
 async function listarDonaciones(req, res) {
@@ -121,6 +358,7 @@ async function listarDonaciones(req, res) {
                 id_donacion,
                 nombre_donante,
                 correo_donante,
+                telefono_donante,
                 tipo_donacion,
                 monto,
                 descripcion,
@@ -153,6 +391,7 @@ async function obtenerDonacion(req, res) {
                 d.id_donacion,
                 d.nombre_donante,
                 d.correo_donante,
+                d.telefono_donante,
                 d.tipo_donacion,
                 d.monto,
                 d.descripcion,
@@ -192,50 +431,316 @@ async function obtenerDonacion(req, res) {
 }
 
 async function actualizarEstadoDonacion(req, res) {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
 
-        const estadosPermitidos = [
+    try {
+
+        const {
+            id
+        } = req.params;
+
+
+        const {
+            estado
+        } = req.body;
+
+
+        /*
+         * Buscar la donación primero.
+         */
+        const [donaciones] =
+            await pool.execute(
+                `SELECT
+                    id_donacion,
+                    nombre_donante,
+                    correo_donante,
+                    telefono_donante,
+                    tipo_donacion,
+                    monto,
+                    descripcion,
+                    estado
+                 FROM donacion
+                 WHERE id_donacion = ?
+                 LIMIT 1`,
+                [
+                    id
+                ]
+            );
+
+
+        if (
+            donaciones.length === 0
+        ) {
+
+            return res
+                .status(404)
+                .json({
+                    mensaje:
+                        "Donación no encontrada."
+                });
+
+        }
+
+
+        const donacion =
+            donaciones[0];
+        
+                /*
+        * Secretaría puede gestionar
+        * donaciones en especie, pero no
+        * donaciones monetarias.
+        */
+        if (
+            req.usuario?.rol === "Secretaria" &&
+            donacion.tipo_donacion === "Monetaria"
+        ) {
+
+            return res
+                .status(403)
+                .json({
+                    mensaje:
+                        "Secretaría solo puede gestionar el estado de las donaciones en especie."
+                });
+
+        }
+
+
+        /*
+         * Estados según el tipo
+         * de donación.
+         */
+
+        const estadosMonetaria = [
             "Pendiente",
             "Confirmada",
+            "Cancelada"
+        ];
+
+
+        const estadosEspecie = [
+            "Pendiente",
+            "Contactada",
+            "Coordinada",
             "Recibida",
             "Cancelada"
         ];
 
-        if (!estadosPermitidos.includes(estado)) {
-            return res.status(400).json({
-                mensaje: "Estado de donación no válido."
-            });
+
+        const estadosPermitidos =
+            donacion.tipo_donacion ===
+            "Especie"
+                ? estadosEspecie
+                : estadosMonetaria;
+
+
+        if (
+            !estadosPermitidos.includes(
+                estado
+            )
+        ) {
+
+            return res
+                .status(400)
+                .json({
+                    mensaje:
+                        `El estado ${estado} no es válido para una donación ${donacion.tipo_donacion.toLowerCase()}.`
+                });
+
         }
 
-        const [resultado] = await pool.execute(
+
+        if (
+            donacion.estado === estado
+        ) {
+
+            return res
+                .status(400)
+                .json({
+                    mensaje:
+                        `La donación ya se encuentra en estado ${estado}.`
+                });
+
+        }
+
+
+        /*
+         * Actualizar estado.
+         */
+
+        await pool.execute(
             `UPDATE donacion
              SET estado = ?
              WHERE id_donacion = ?`,
-            [estado, id]
+            [
+                estado,
+                id
+            ]
         );
 
-        if (resultado.affectedRows === 0) {
-            return res.status(404).json({
-                mensaje: "Donación no encontrada."
-            });
+
+        /*
+         * ==========================
+         * CORREO DONACIÓN EN ESPECIE
+         * ==========================
+         */
+
+        let correoEnviado = false;
+
+
+        if (
+            donacion.tipo_donacion ===
+                "Especie" &&
+            donacion.correo_donante
+        ) {
+
+            try {
+
+                let asunto = "";
+                let texto = "";
+
+
+                /*
+                 * Cuando la entrega
+                 * ya fue recibida.
+                 */
+                if (
+                    estado === "Recibida"
+                ) {
+
+                    asunto =
+                        "Donación recibida - Mesón Buen Samaritano";
+
+
+                    texto =
+`Hola ${donacion.nombre_donante || "donante"},
+
+Confirmamos que hemos recibido tu donación en especie.
+
+Donación:
+${donacion.descripcion}
+
+Agradecemos mucho tu apoyo y colaboración con nuestros adultos mayores.
+
+Mesón Buen Samaritano`;
+
+                }
+
+
+                /*
+                 * Si la donación fue
+                 * cancelada.
+                 */
+                if (
+                    estado === "Cancelada"
+                ) {
+
+                    asunto =
+                        "Actualización de donación en especie";
+
+
+                    texto =
+`Hola ${donacion.nombre_donante || "donante"},
+
+Te informamos que el seguimiento de la donación en especie registrada ha sido cancelado.
+
+Donación:
+${donacion.descripcion}
+
+Si deseas apoyarnos nuevamente, puedes registrar una nueva donación desde nuestra plataforma.
+
+Mesón Buen Samaritano`;
+
+                }
+
+
+                if (
+                    asunto &&
+                    texto
+                ) {
+
+                    await enviarCorreo({
+
+                        para:
+                            donacion.correo_donante,
+
+                        asunto,
+
+                        texto
+
+                    });
+
+
+                    correoEnviado = true;
+
+
+                    console.log(
+                        "Correo de seguimiento de donación enviado a:",
+                        donacion.correo_donante
+                    );
+
+                }
+
+
+            } catch (errorCorreo) {
+
+                console.error(
+                    "El estado cambió, pero no se pudo enviar el correo de donación:"
+                );
+
+                console.error(
+                    errorCorreo
+                );
+
+            }
+
         }
 
-        res.json({
-            mensaje: "Estado de la donación actualizado correctamente."
+
+        /*
+         * Respuesta.
+         */
+
+        let mensaje =
+            `Donación actualizada a ${estado} correctamente.`;
+
+
+        if (
+            correoEnviado
+        ) {
+
+            mensaje +=
+                " Se envió una notificación por correo electrónico.";
+
+        }
+
+
+        return res.json({
+
+            mensaje,
+
+            estado,
+
+            correoEnviado
+
         });
+
 
     } catch (error) {
+
         console.error(
-            "Error al actualizar donación:",
-            error.message
+            "Error al actualizar estado de donación:",
+            error
         );
 
-        res.status(500).json({
-            mensaje: "Ocurrió un error al actualizar la donación."
-        });
+
+        return res
+            .status(500)
+            .json({
+                mensaje:
+                    "Ocurrió un error al actualizar el estado de la donación."
+            });
+
     }
+
 }
 
 async function crearOrdenPago(req, res) {

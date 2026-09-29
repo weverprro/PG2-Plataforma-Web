@@ -15,6 +15,49 @@ const {
 const router = express.Router();
 
 router.get(
+    "/paypal/retorno",
+    (req, res) => {
+
+        const {
+            token,
+            PayerID
+        } = req.query;
+
+
+        const frontend =
+            process.env.FRONTEND_URL ||
+            "http://localhost:5173";
+
+
+        const destino =
+            `${frontend}/donaciones` +
+            `?paypal=aprobado` +
+            `&token=${encodeURIComponent(token || "")}` +
+            `&payerId=${encodeURIComponent(PayerID || "")}`;
+
+
+        return res.redirect(
+            destino
+        );
+    }
+);
+
+router.get(
+    "/paypal/cancelado",
+    (req, res) => {
+
+        const frontend =
+            process.env.FRONTEND_URL ||
+            "http://localhost:5173";
+
+
+        return res.redirect(
+            `${frontend}/donaciones?paypal=cancelado`
+        );
+    }
+);
+
+router.get(
     "/tipos",
     obtenerTiposDonacion
 );
@@ -49,22 +92,13 @@ router.get(
 router.put(
     "/:id/estado",
     verificarToken,
-    permitirRoles("Administrador","Contador"),
+    permitirRoles(
+        "Administrador",
+        "Secretaria",
+        "Contador"
+    ),
     actualizarEstadoDonacion
 );
 
-router.get("/paypal/retorno", (req, res) => {
-    res.json({
-        mensaje: "Pago aprobado en PayPal.",
-        token: req.query.token,
-        payerId: req.query.PayerID
-    });
-});
-
-router.get("/paypal/cancelado", (req, res) => {
-    res.json({
-        mensaje: "El pago fue cancelado."
-    });
-});
 
 module.exports = router;

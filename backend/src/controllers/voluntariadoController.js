@@ -1,5 +1,7 @@
 const pool = require("../config/database");
 
+const {enviarCorreo} = require("../services/emailService");
+
 async function listarActividades(req, res) {
     try {
         const [actividades] = await pool.execute(
@@ -236,7 +238,7 @@ async function crearSolicitudVoluntariado(req, res) {
         );
 
         res.status(201).json({
-            mensaje: "Solicitud de voluntariado enviada correctamente.",
+            mensaje: "Solicitud de voluntariado enviada correctamente. Queda pendiente de aprobación. Nos comunicaremos contigo por correo electrónico o llamada telefónica para confirmar tu voluntariado.",
             idSolicitud: resultado.insertId
         });
 
@@ -395,8 +397,182 @@ async function actualizarEstadoSolicitud(req, res) {
 
         await conexion.commit();
 
-        res.json({
-            mensaje: "Estado de la solicitud actualizado correctamente."
+        let correoEnviado = false;
+
+
+        try {
+
+            const [datosSolicitud] =
+                await conexion.execute(
+                    `SELECT
+                        sv.nombre_voluntario,
+                        sv.correo_voluntario,
+                        sv.telefono,
+                        sv.observaciones,
+                        sv.estado,
+
+                        av.titulo AS actividad,
+
+                        DATE_FORMAT(
+                            av.fecha,
+                            '%d/%m/%Y'
+                        ) AS fecha_actividad,
+
+                        TIME_FORMAT(
+                            av.hora_inicio,
+                            '%H:%i'
+                        ) AS hora_inicio,
+
+                        TIME_FORMAT(
+                            av.hora_fin,
+                            '%H:%i'
+                        ) AS hora_fin
+
+                    FROM solicitud_voluntariado sv
+
+                    INNER JOIN actividad_voluntariado av
+                        ON av.id_actividad =
+                        sv.id_actividad
+
+                    WHERE sv.id_solicitud = ?
+
+                    LIMIT 1`,
+                    [
+                        id
+                    ]
+                );
+
+
+            const solicitud =
+                datosSolicitud[0];
+
+
+            if (
+                solicitud &&
+                solicitud.correo_voluntario
+            ) {
+
+                let asunto = "";
+                let texto = "";
+
+
+                if (
+                    estado === "Aprobada"
+                ) {
+
+                    asunto =
+                        "Solicitud de voluntariado aprobada";
+
+
+                    texto =
+        `Hola ${solicitud.nombre_voluntario},
+
+        Tu solicitud de voluntariado ha sido aprobada.
+
+        Actividad: ${solicitud.actividad}
+        Fecha: ${solicitud.fecha_actividad}
+        Horario: ${solicitud.hora_inicio || "Por confirmar"}${solicitud.hora_fin ? ` - ${solicitud.hora_fin}` : ""}
+
+        Gracias por ofrecer tu tiempo y apoyo a nuestros adultos mayores.
+
+        Si es necesario, personal del hogar podrá comunicarse contigo por teléfono.
+
+        Mesón Buen Samaritano`;
+
+                } else if (
+                    estado === "Rechazada"
+                ) {
+
+                    asunto =
+                        "Actualización de solicitud de voluntariado";
+
+
+                    texto =
+        `Hola ${solicitud.nombre_voluntario},
+
+        Te informamos que tu solicitud para participar en la actividad "${solicitud.actividad}" no pudo ser aprobada.
+
+        Puedes consultar otras actividades disponibles y enviar una nueva solicitud.
+
+        Gracias por tu interés en apoyar al Mesón Buen Samaritano.`;
+
+                } else if (
+                    estado === "Cancelada"
+                ) {
+
+                    asunto =
+                        "Participación de voluntariado cancelada";
+
+
+                    texto =
+        `Hola ${solicitud.nombre_voluntario},
+
+        Te informamos que tu participación en la actividad "${solicitud.actividad}" ha sido cancelada.
+
+        Fecha: ${solicitud.fecha_actividad}
+
+        Si deseas participar en otra actividad, puedes consultar nuevamente las opciones disponibles.
+
+        Mesón Buen Samaritano`;
+
+                }
+
+
+                if (
+                    asunto &&
+                    texto
+                ) {
+
+                    console.log(
+                        "Intentando enviar correo de voluntariado a:",
+                        solicitud.correo_voluntario
+                    );
+
+
+                    await enviarCorreo({
+                        para:
+                            solicitud.correo_voluntario,
+
+                        asunto,
+
+                        texto
+                    });
+
+
+                    correoEnviado = true;
+
+
+                    console.log(
+                        "Correo de voluntariado enviado correctamente a:",
+                        solicitud.correo_voluntario
+                    );
+
+                }
+
+            }
+
+        } catch (errorCorreo) {
+
+            console.error(
+                "ERROR AL ENVIAR CORREO DE VOLUNTARIADO:"
+            );
+
+            console.error(
+                errorCorreo
+            );
+
+        }
+
+
+        return res.json({
+
+            mensaje:
+                correoEnviado
+                    ? `Solicitud ${estado.toLowerCase()} correctamente. Se envió una notificación por correo electrónico.`
+                    : `Solicitud ${estado.toLowerCase()} correctamente, pero no fue posible enviar la notificación por correo electrónico.`,
+
+            correoEnviado
+
         });
 
     } catch (error) {

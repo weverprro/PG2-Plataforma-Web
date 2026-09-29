@@ -6,6 +6,8 @@ backend/.env
 
 # Archivos generados por Prisma
 backend/generated/
+#para que no se almacenen imagenes en el repositorio
+backend/uploads/
 
 # Logs
 *.log
