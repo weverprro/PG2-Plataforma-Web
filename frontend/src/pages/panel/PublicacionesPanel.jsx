@@ -45,6 +45,11 @@ function PublicacionesPanel() {
     ] = useState([]);
 
     const [
+        vistaPublicaciones,
+        setVistaPublicaciones
+    ] = useState("todas");
+
+    const [
         necesidades,
         setNecesidades
     ] = useState([]);
@@ -748,28 +753,98 @@ function PublicacionesPanel() {
     }
 
 
+    async function eliminarDefinitivamente(
+        publicacion
+    ) {
+
+        const confirmar = window.confirm(
+            `¿Eliminar definitivamente "${publicacion.titulo}"?\n\nEsta acción borrará la publicación y sus imágenes de Cloudinary. No se puede deshacer.`
+        );
+
+        if (!confirmar) {
+            return;
+        }
+
+        try {
+            setError("");
+            setMensaje("");
+
+            const respuesta = await apiFetch(
+                `/publicaciones/${publicacion.id_publicacion}/definitiva`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+            if (
+                idEdicion ===
+                publicacion.id_publicacion
+            ) {
+                limpiarFormulario();
+            }
+
+            await recargarPublicaciones();
+
+            if (respuesta.imagenesPendientes > 0) {
+                setMensaje(
+                    `Publicación eliminada de la base de datos. ${respuesta.imagenesPendientes} imagen(es) quedaron pendientes de eliminar en Cloudinary.`
+                );
+            } else {
+                setMensaje(
+                    "Publicación eliminada definitivamente."
+                );
+            }
+
+        } catch (error) {
+            setError(
+                error.message
+            );
+        }
+    }
+
+
+    function estaExpirada(
+        publicacion
+    ) {
+
+        return Boolean(
+            publicacion.fecha_expiracion &&
+            new Date(
+                publicacion.fecha_expiracion
+            ) <= new Date()
+        );
+    }
+
+
     function obtenerEstado(
         publicacion
     ) {
+
+        if (estaExpirada(publicacion)) {
+            return "Expirada";
+        }
+
 
         if (!publicacion.estado) {
             return "Desactivada";
         }
 
 
-        if (
-            publicacion.fecha_expiracion &&
-            new Date(
-                publicacion.fecha_expiracion
-            ) < new Date()
-        ) {
-
-            return "Expirada";
-        }
-
-
         return "Activa";
     }
+
+
+    const publicacionesExpiradas =
+        publicaciones.filter(
+            publicacion =>
+                estaExpirada(publicacion)
+        );
+
+
+    const publicacionesMostradas =
+        vistaPublicaciones === "expiradas"
+            ? publicacionesExpiradas
+            : publicaciones;
 
 
     return (
@@ -1417,9 +1492,47 @@ function PublicacionesPanel() {
 
                     <span>
                         {
-                            publicaciones.length
+                            publicacionesMostradas.length
                         } publicaciones
                     </span>
+
+                </div>
+
+
+                <div className="publicaciones-filtros">
+
+                    <button
+                        type="button"
+
+                        className={
+                            vistaPublicaciones === "todas"
+                                ? "boton-principal"
+                                : "boton-secundario"
+                        }
+
+                        onClick={() =>
+                            setVistaPublicaciones("todas")
+                        }
+                    >
+                        Todas ({publicaciones.length})
+                    </button>
+
+
+                    <button
+                        type="button"
+
+                        className={
+                            vistaPublicaciones === "expiradas"
+                                ? "boton-principal"
+                                : "boton-secundario"
+                        }
+
+                        onClick={() =>
+                            setVistaPublicaciones("expiradas")
+                        }
+                    >
+                        Expiradas ({publicacionesExpiradas.length})
+                    </button>
 
                 </div>
 
@@ -1430,11 +1543,21 @@ function PublicacionesPanel() {
                         Cargando publicaciones...
                     </div>
 
+                ) : publicacionesMostradas.length === 0 ? (
+
+                    <div className="mensaje-estado">
+                        {
+                            vistaPublicaciones === "expiradas"
+                                ? "No hay publicaciones expiradas."
+                                : "No hay publicaciones registradas."
+                        }
+                    </div>
+
                 ) : (
 
                     <div className="lista-publicaciones-admin">
 
-                        {publicaciones.map(
+                        {publicacionesMostradas.map(
                             publicacion => (
 
                                 <article
@@ -1580,6 +1703,28 @@ function PublicacionesPanel() {
                                             }
 
                                         </button>
+
+
+                                        {
+                                            vistaPublicaciones === "expiradas" &&
+                                            estaExpirada(publicacion) && (
+
+                                                <button
+                                                    type="button"
+
+                                                    className="boton-secundario"
+
+                                                    onClick={() =>
+                                                        eliminarDefinitivamente(
+                                                            publicacion
+                                                        )
+                                                    }
+                                                >
+                                                    Eliminar definitivamente
+                                                </button>
+
+                                            )
+                                        }
 
                                     </div>
 

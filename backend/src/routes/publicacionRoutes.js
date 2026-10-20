@@ -9,7 +9,8 @@ const {
     crearPublicacion,
     editarPublicacion,
     cambiarEstadoPublicacion,
-    eliminarPublicacion
+    eliminarPublicacion,
+    eliminarPublicacionDefinitiva
 } = require("../controllers/publicacionController");
 
 const verificarToken =
@@ -28,6 +29,7 @@ const subirImagenesPublicacion =
     require(
         "../middleware/uploadPublicacion"
     );
+
 /*
 =========================================
 RUTAS PUBLICAS
@@ -67,20 +69,18 @@ router.post(
     crearPublicacion
 );
 
+
 router.post(
     "/subir-imagenes",
-
     verificarToken,
-
     permitirRoles(
         "Administrador",
         "Secretaria"
     ),
-
     subirImagenesPublicacion,
-
     subirImagenes
 );
+
 
 router.put(
     "/:id/estado",
@@ -90,6 +90,17 @@ router.put(
         "Secretaria"
     ),
     cambiarEstadoPublicacion
+);
+
+
+router.delete(
+    "/:id/definitiva",
+    verificarToken,
+    permitirRoles(
+        "Administrador",
+        "Secretaria"
+    ),
+    eliminarPublicacionDefinitiva
 );
 
 
@@ -113,7 +124,6 @@ router.delete(
     ),
     eliminarPublicacion
 );
-
 
 
 /*

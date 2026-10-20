@@ -922,6 +922,147 @@ async function cambiarEstadoPublicacion(req, res) {
     }
 }
 
+async function eliminarPublicacionDefinitiva(req, res) {
+    const conexion = await pool.getConnection();
+
+    try {
+        const {id} = req.params;
+
+        const [publicaciones] = await conexion.execute(
+            `SELECT
+                id_publicacion,
+                titulo,
+                fecha_expiracion
+             FROM publicacion
+             WHERE id_publicacion = ?
+             LIMIT 1`,
+            [id]
+        );
+
+        if (publicaciones.length === 0) {
+            return res.status(404).json({
+                mensaje: "Publicación no encontrada."
+            });
+        }
+
+        const publicacion = publicaciones[0];
+
+        if (!publicacion.fecha_expiracion) {
+            return res.status(400).json({
+                mensaje:
+                    "Solo se pueden eliminar definitivamente publicaciones expiradas."
+            });
+        }
+
+        const [validacionExpiracion] = await conexion.execute(
+            `SELECT ? <= NOW() AS expirada`,
+            [publicacion.fecha_expiracion]
+        );
+
+        if (!Boolean(validacionExpiracion[0].expirada)) {
+            return res.status(400).json({
+                mensaje:
+                    "La publicación todavía no ha expirado."
+            });
+        }
+
+        const [imagenes] = await conexion.execute(
+            `SELECT imagen_public_id
+             FROM publicacion_imagen
+             WHERE id_publicacion = ?`,
+            [id]
+        );
+
+        const publicIds = imagenes
+            .map(
+                imagen =>
+                    imagen.imagen_public_id
+            )
+            .filter(Boolean);
+
+        await conexion.beginTransaction();
+
+        await conexion.execute(
+            `DELETE FROM publicacion_imagen
+             WHERE id_publicacion = ?`,
+            [id]
+        );
+
+        const [resultado] = await conexion.execute(
+            `DELETE FROM publicacion
+             WHERE id_publicacion = ?`,
+            [id]
+        );
+
+        if (resultado.affectedRows === 0) {
+            await conexion.rollback();
+
+            return res.status(404).json({
+                mensaje: "Publicación no encontrada."
+            });
+        }
+
+        await conexion.commit();
+
+        const resultadosCloudinary =
+            await Promise.allSettled(
+                publicIds.map(
+                    publicId =>
+                        cloudinary.uploader.destroy(
+                            publicId,
+                            {
+                                resource_type: "image",
+                                invalidate: true
+                            }
+                        )
+                )
+            );
+
+        const erroresCloudinary =
+            resultadosCloudinary.filter(
+                resultado =>
+                    resultado.status === "rejected" ||
+                    (
+                        resultado.status === "fulfilled" &&
+                        resultado.value?.result !== "ok" &&
+                        resultado.value?.result !== "not found"
+                    )
+            );
+
+        if (erroresCloudinary.length > 0) {
+            console.warn(
+                `La publicación ${id} se eliminó de MySQL, pero ${erroresCloudinary.length} imagen(es) no pudieron eliminarse de Cloudinary.`
+            );
+        }
+
+        return res.json({
+            mensaje:
+                "Publicación eliminada definitivamente.",
+            imagenesEliminadas:
+                publicIds.length - erroresCloudinary.length,
+            imagenesPendientes:
+                erroresCloudinary.length
+        });
+    } catch (error) {
+        try {
+            await conexion.rollback();
+        } catch (_) {}
+
+        console.error(
+            "Error al eliminar definitivamente la publicación:",
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje:
+                "Ocurrió un error al eliminar definitivamente la publicación."
+        });
+    } finally {
+        conexion.release();
+    }
+}
+
+
 async function eliminarPublicacion(req, res) {
     try {
         const {id} = req.params;
@@ -963,5 +1104,6 @@ module.exports = {
     crearPublicacion,
     editarPublicacion,
     cambiarEstadoPublicacion,
-    eliminarPublicacion
+    eliminarPublicacion,
+    eliminarPublicacionDefinitiva
 };
