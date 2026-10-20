@@ -1,5 +1,6 @@
 import {
     useEffect,
+    useRef,
     useState
 } from "react";
 
@@ -7,6 +8,8 @@ import {
     apiFetch
 } from "../../services/api";
 
+import TurnstileWidget
+    from "../../components/common/TurnstileWidget";
 
 const formularioInicial = {
     nombreVisitante: "",
@@ -36,6 +39,15 @@ function Visitas() {
     ] = useState(
         formularioInicial
     );
+
+    const [
+        turnstileToken,
+        setTurnstileToken
+    ] = useState("");
+
+
+    const turnstileRef =
+        useRef(null);
 
     const [
         cargando,
@@ -169,6 +181,16 @@ function Visitas() {
             setEnviando(true);
             setMensaje("");
             setError("");
+        
+            if (!turnstileToken) {
+
+                setError(
+                    "Completa la verificación de seguridad antes de enviar la solicitud."
+                );
+
+                return;
+
+            }
 
 
             if (
@@ -205,7 +227,10 @@ function Visitas() {
                 idDisponibilidad:
                     Number(
                         formulario.idDisponibilidad
-                    )
+                    ),
+                
+                turnstileToken:
+                    turnstileToken
 
             };
 
@@ -233,7 +258,10 @@ function Visitas() {
             setFormulario(
                 formularioInicial
             );
+            
+            setTurnstileToken("");
 
+            turnstileRef.current?.reset();
 
             /*
              * Recargamos por si la
@@ -249,6 +277,10 @@ function Visitas() {
                 error.message ||
                 "No fue posible enviar la solicitud."
             );
+
+            setTurnstileToken("");
+
+            turnstileRef.current?.reset();
 
         } finally {
 
@@ -681,6 +713,47 @@ function Visitas() {
 
                         </div>
 
+                        <div className="campo-formulario">
+
+                            <TurnstileWidget
+                                ref={
+                                    turnstileRef
+                                }
+                                onVerify={token => {
+                                        setTurnstileToken(token);
+                                    }
+                                }
+
+                                onExpire={
+                                    () => {
+
+                                        setTurnstileToken(
+                                            ""
+                                        );
+
+                                        setError(
+                                            "La verificación de seguridad expiró. Verifica nuevamente."
+                                        );
+
+                                    }
+                                }
+
+                                onError={
+                                    () => {
+
+                                        setTurnstileToken(
+                                            ""
+                                        );
+
+                                        setError(
+                                            "No fue posible completar la verificación de seguridad."
+                                        );
+
+                                    }
+                                }
+                            />
+
+                        </div>
 
                         <div className="visita-seleccion-resumen">
 
@@ -709,7 +782,13 @@ function Visitas() {
 
                             disabled={
                                 enviando ||
-                                disponibilidades.length === 0
+                                disponibilidades.length === 0 ||
+                                !turnstileToken ||
+                                !formulario.idDisponibilidad ||
+                                !formulario.nombreVisitante.trim() ||
+                                !formulario.correo.trim() ||
+                                !formulario.telefono.trim() ||
+                                Number(formulario.cantidadPersonas) <= 0
                             }
                         >
 

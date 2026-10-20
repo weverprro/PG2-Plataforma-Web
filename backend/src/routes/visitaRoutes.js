@@ -1,6 +1,8 @@
 const express = require("express");
 const verificarToken = require("../middleware/authMiddleware");
 const permitirRoles = require("../middleware/roleMiddleware");
+const { formularioPublicoLimiter } = require("../middleware/rateLimitMiddleware");
+const { verificarTurnstile } = require("../middleware/turnstileMiddleware");
 
 const {
     listarDisponibilidades,
@@ -32,10 +34,7 @@ router.put(
     actualizarDisponibilidad
 );
 
-router.post(
-    "/solicitudes",
-    crearSolicitudVisita
-);
+router.post("/solicitudes", formularioPublicoLimiter, verificarTurnstile, crearSolicitudVisita);
 
 router.get(
     "/solicitudes",

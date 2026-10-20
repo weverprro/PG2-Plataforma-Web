@@ -1,6 +1,8 @@
 const express = require("express");
 const verificarToken = require("../middleware/authMiddleware");
 const permitirRoles = require("../middleware/roleMiddleware");
+const { formularioPublicoLimiter, pagoLimiter } = require("../middleware/rateLimitMiddleware");
+const { verificarTurnstile } = require("../middleware/turnstileMiddleware");
 
 const {
     obtenerTiposDonacion,
@@ -64,6 +66,8 @@ router.get(
 
 router.post(
     "/",
+    formularioPublicoLimiter,
+    verificarTurnstile,
     crearDonacion
 );
 
@@ -75,10 +79,12 @@ router.get(
 );
 router.post(
     "/:id/paypal/crear-orden",
+    pagoLimiter,
     crearOrdenPago
 );
 router.post(
     "/:id/paypal/capturar",
+    pagoLimiter,
     capturarOrdenPago
 );
 

@@ -3,6 +3,7 @@ const pool = require("../config/database");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const verificarToken = require("../middleware/authMiddleware");
+const { loginLimiter } = require("../middleware/rateLimitMiddleware");
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.get("/verificar-correo", async (req, res) => {
     }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
     try {
         const { correo, contrasena } = req.body;
 

@@ -1,6 +1,77 @@
 const pool = require("../config/database");
+const { enviarCorreo } = require("../services/emailService");
+const {
+    normalizarTexto,
+    tieneLongitudValida,
+    correoValido,
+    telefonoValido,
+    enteroEnRango,
+    idValido,
+    contieneCaracteresControl
+} = require("../utils/validation");
 
-const {enviarCorreo} = require("../services/emailService");
+function fechaValida(fecha) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return false;
+    }
+
+    const [anio, mes, dia] =
+        fecha.split("-").map(Number);
+
+    const fechaObjeto =
+        new Date(Date.UTC(anio, mes - 1, dia));
+
+    return (
+        fechaObjeto.getUTCFullYear() === anio &&
+        fechaObjeto.getUTCMonth() === mes - 1 &&
+        fechaObjeto.getUTCDate() === dia
+    );
+}
+
+function horaValida(hora) {
+    if (
+        typeof hora !== "string" ||
+        !/^\d{2}:\d{2}(:\d{2})?$/.test(hora)
+    ) {
+        return false;
+    }
+
+    const [horas, minutos, segundos = "00"] =
+        hora.split(":").map(Number);
+
+    return (
+        horas >= 0 &&
+        horas <= 23 &&
+        minutos >= 0 &&
+        minutos <= 59 &&
+        segundos >= 0 &&
+        segundos <= 59
+    );
+}
+
+function estadoBooleanoValido(valor) {
+    return [
+        true,
+        false,
+        1,
+        0,
+        "1",
+        "0",
+        "true",
+        "false"
+    ].includes(valor);
+}
+
+function convertirEstadoBooleano(valor) {
+    return (
+        valor === true ||
+        valor === 1 ||
+        valor === "1" ||
+        valor === "true"
+    )
+        ? 1
+        : 0;
+}
 
 async function listarDisponibilidades(req, res) {
     try {
@@ -14,213 +85,509 @@ async function listarDisponibilidades(req, res) {
                 estado
              FROM disponibilidad_visita
              WHERE estado = TRUE
-             AND fecha >= CURDATE()
+             AND cupos_disponibles > 0
+             AND TIMESTAMP(fecha, hora_fin) > NOW()
              ORDER BY fecha ASC, hora_inicio ASC`
         );
 
         res.json(disponibilidades);
-
     } catch (error) {
-        console.error("Error al listar disponibilidades:", error.message);
+        console.error(
+            "Error al listar disponibilidades:",
+            error.message
+        );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al obtener las disponibilidades."
+            mensaje:
+                "Ocurrió un error al obtener las disponibilidades."
         });
     }
 }
 
 async function crearDisponibilidad(req, res) {
     try {
-        const {
-            fecha,
-            horaInicio,
-            horaFin,
-            cuposDisponibles
-        } = req.body;
+        const fecha =
+            normalizarTexto(req.body.fecha);
 
-        if (!fecha || !horaInicio || !horaFin || !cuposDisponibles) {
+        const horaInicio =
+            normalizarTexto(req.body.horaInicio);
+
+        const horaFin =
+            normalizarTexto(req.body.horaFin);
+
+        const { cuposDisponibles } =
+            req.body;
+
+        if (
+            !fecha ||
+            !horaInicio ||
+            !horaFin ||
+            cuposDisponibles === undefined
+        ) {
             return res.status(400).json({
-                mensaje: "Todos los campos son obligatorios."
+                mensaje:
+                    "Todos los campos son obligatorios."
             });
         }
 
-        if (cuposDisponibles <= 0) {
+        if (!fechaValida(fecha)) {
             return res.status(400).json({
-                mensaje: "Los cupos disponibles deben ser mayores que cero."
+                mensaje:
+                    "La fecha no tiene un formato válido."
             });
         }
 
-        const [resultado] = await pool.execute(
-            `INSERT INTO disponibilidad_visita
-            (
-                fecha,
-                hora_inicio,
-                hora_fin,
-                cupos_disponibles
+        if (
+            !horaValida(horaInicio) ||
+            !horaValida(horaFin)
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "El horario no tiene un formato válido."
+            });
+        }
+
+        if (
+            !enteroEnRango(
+                cuposDisponibles,
+                1,
+                1000
             )
-            VALUES (?, ?, ?, ?)`,
-            [
-                fecha,
-                horaInicio,
-                horaFin,
-                cuposDisponibles
-            ]
-        );
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "Los cupos disponibles deben ser un número entero entre 1 y 1000."
+            });
+        }
+
+        if (horaInicio >= horaFin) {
+            return res.status(400).json({
+                mensaje:
+                    "La hora de finalización debe ser posterior a la hora de inicio."
+            });
+        }
+
+        const [validacionFecha] =
+            await pool.execute(
+                `SELECT
+                    TIMESTAMP(?, ?) <= NOW() AS vencida`,
+                [
+                    fecha,
+                    horaFin
+                ]
+            );
+
+        if (validacionFecha[0]?.vencida) {
+            return res.status(400).json({
+                mensaje:
+                    "No se puede crear un horario cuya fecha y hora de finalización ya hayan pasado."
+            });
+        }
+
+        const [resultado] =
+            await pool.execute(
+                `INSERT INTO disponibilidad_visita
+                (
+                    fecha,
+                    hora_inicio,
+                    hora_fin,
+                    cupos_disponibles
+                )
+                VALUES (?, ?, ?, ?)`,
+                [
+                    fecha,
+                    horaInicio,
+                    horaFin,
+                    Number(cuposDisponibles)
+                ]
+            );
 
         res.status(201).json({
-            mensaje: "Disponibilidad creada correctamente.",
-            idDisponibilidad: resultado.insertId
+            mensaje:
+                "Disponibilidad creada correctamente.",
+            idDisponibilidad:
+                resultado.insertId
         });
-
     } catch (error) {
-        console.error("Error al crear disponibilidad:", error.message);
+        console.error(
+            "Error al crear disponibilidad:",
+            error.message
+        );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al crear la disponibilidad."
+            mensaje:
+                "Ocurrió un error al crear la disponibilidad."
         });
     }
 }
 
 async function actualizarDisponibilidad(req, res) {
     try {
-        const { id } = req.params;
+        const id =
+            Number(req.params.id);
+
+        const fecha =
+            normalizarTexto(req.body.fecha);
+
+        const horaInicio =
+            normalizarTexto(req.body.horaInicio);
+
+        const horaFin =
+            normalizarTexto(req.body.horaFin);
 
         const {
-            fecha,
-            horaInicio,
-            horaFin,
             cuposDisponibles,
             estado
         } = req.body;
 
-        const [resultado] = await pool.execute(
-            `UPDATE disponibilidad_visita
-             SET fecha = ?,
-                 hora_inicio = ?,
-                 hora_fin = ?,
-                 cupos_disponibles = ?,
-                 estado = ?
-             WHERE id_disponibilidad = ?`,
-            [
-                fecha,
-                horaInicio,
-                horaFin,
+        if (!idValido(id)) {
+            return res.status(400).json({
+                mensaje:
+                    "El identificador de la disponibilidad no es válido."
+            });
+        }
+
+        if (
+            !fecha ||
+            !horaInicio ||
+            !horaFin ||
+            cuposDisponibles === undefined ||
+            estado === undefined
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "Todos los campos son obligatorios."
+            });
+        }
+
+        if (!fechaValida(fecha)) {
+            return res.status(400).json({
+                mensaje:
+                    "La fecha no tiene un formato válido."
+            });
+        }
+
+        if (
+            !horaValida(horaInicio) ||
+            !horaValida(horaFin)
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "El horario no tiene un formato válido."
+            });
+        }
+
+        if (
+            !enteroEnRango(
                 cuposDisponibles,
-                estado,
-                id
-            ]
-        );
+                0,
+                1000
+            )
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "Los cupos disponibles deben ser un número entero entre 0 y 1000."
+            });
+        }
+
+        if (!estadoBooleanoValido(estado)) {
+            return res.status(400).json({
+                mensaje:
+                    "El estado de la disponibilidad no es válido."
+            });
+        }
+
+        if (horaInicio >= horaFin) {
+            return res.status(400).json({
+                mensaje:
+                    "La hora de finalización debe ser posterior a la hora de inicio."
+            });
+        }
+
+        const estadoNormalizado =
+            convertirEstadoBooleano(estado);
+
+        if (estadoNormalizado === 1) {
+            const [validacionFecha] =
+                await pool.execute(
+                    `SELECT
+                        TIMESTAMP(?, ?) <= NOW() AS vencida`,
+                    [
+                        fecha,
+                        horaFin
+                    ]
+                );
+
+            if (validacionFecha[0]?.vencida) {
+                return res.status(400).json({
+                    mensaje:
+                        "No se puede mantener activo un horario cuya fecha y hora ya hayan vencido."
+                });
+            }
+        }
+
+        const [resultado] =
+            await pool.execute(
+                `UPDATE disponibilidad_visita
+                 SET fecha = ?,
+                     hora_inicio = ?,
+                     hora_fin = ?,
+                     cupos_disponibles = ?,
+                     estado = ?
+                 WHERE id_disponibilidad = ?`,
+                [
+                    fecha,
+                    horaInicio,
+                    horaFin,
+                    Number(cuposDisponibles),
+                    estadoNormalizado,
+                    id
+                ]
+            );
 
         if (resultado.affectedRows === 0) {
             return res.status(404).json({
-                mensaje: "Disponibilidad no encontrada."
+                mensaje:
+                    "Disponibilidad no encontrada."
             });
         }
 
         res.json({
-            mensaje: "Disponibilidad actualizada correctamente."
+            mensaje:
+                "Disponibilidad actualizada correctamente."
         });
-
     } catch (error) {
-        console.error("Error al actualizar disponibilidad:", error.message);
+        console.error(
+            "Error al actualizar disponibilidad:",
+            error.message
+        );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al actualizar la disponibilidad."
+            mensaje:
+                "Ocurrió un error al actualizar la disponibilidad."
         });
     }
 }
 
 async function crearSolicitudVisita(req, res) {
     try {
+        const nombreVisitante =
+            normalizarTexto(
+                req.body.nombreVisitante
+            );
+
+        const correoVisitante =
+            normalizarTexto(
+                req.body.correoVisitante
+            ).toLowerCase();
+
+        const telefono =
+            normalizarTexto(
+                req.body.telefono
+            );
+
+        const motivo =
+            normalizarTexto(
+                req.body.motivo
+            );
+
         const {
-            nombreVisitante,
-            correoVisitante,
-            telefono,
             cantidadPersonas,
-            motivo,
             idDisponibilidad
         } = req.body;
 
         if (
             !nombreVisitante ||
             !correoVisitante ||
-            !cantidadPersonas ||
-            !idDisponibilidad
+            !telefono ||
+            cantidadPersonas === undefined ||
+            idDisponibilidad === undefined
         ) {
             return res.status(400).json({
-                mensaje: "Nombre, correo, cantidad de personas y disponibilidad son obligatorios."
+                mensaje:
+                    "Nombre, correo, teléfono, cantidad de personas y disponibilidad son obligatorios."
             });
         }
 
-        if (cantidadPersonas <= 0) {
+        if (
+            contieneCaracteresControl(
+                nombreVisitante
+            ) ||
+            contieneCaracteresControl(
+                correoVisitante
+            ) ||
+            contieneCaracteresControl(
+                telefono
+            ) ||
+            (
+                motivo &&
+                contieneCaracteresControl(
+                    motivo
+                )
+            )
+        ) {
             return res.status(400).json({
-                mensaje: "La cantidad de personas debe ser mayor que cero."
+                mensaje:
+                    "Uno o más campos contienen caracteres no permitidos."
             });
         }
 
-        const [disponibilidades] = await pool.execute(
-            `SELECT
-                id_disponibilidad,
-                cupos_disponibles,
-                estado
-             FROM disponibilidad_visita
-             WHERE id_disponibilidad = ?
-             AND fecha >= CURDATE()
-             LIMIT 1`,
-            [idDisponibilidad]
-        );
+        if (
+            !tieneLongitudValida(
+                nombreVisitante,
+                2,
+                100
+            )
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "El nombre debe contener entre 2 y 100 caracteres."
+            });
+        }
+
+        if (!correoValido(correoVisitante)) {
+            return res.status(400).json({
+                mensaje:
+                    "El correo electrónico no tiene un formato válido."
+            });
+        }
+
+        if (!telefonoValido(telefono)) {
+            return res.status(400).json({
+                mensaje:
+                    "El teléfono debe contener entre 8 y 30 caracteres y solo puede incluir números, espacios, +, -, paréntesis."
+            });
+        }
+
+        if (
+            motivo &&
+            !tieneLongitudValida(
+                motivo,
+                1,
+                1000
+            )
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "El motivo no puede superar los 1000 caracteres."
+            });
+        }
+
+        if (
+            !enteroEnRango(
+                cantidadPersonas,
+                1,
+                1000
+            )
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "La cantidad de personas debe ser un número entero mayor que cero."
+            });
+        }
+
+        if (!idValido(idDisponibilidad)) {
+            return res.status(400).json({
+                mensaje:
+                    "La disponibilidad seleccionada no es válida."
+            });
+        }
+
+        const cantidadNormalizada =
+            Number(cantidadPersonas);
+
+        const idNormalizado =
+            Number(idDisponibilidad);
+
+        const [disponibilidades] =
+            await pool.execute(
+                `SELECT
+                    id_disponibilidad,
+                    cupos_disponibles,
+                    estado,
+                    fecha,
+                    hora_inicio,
+                    hora_fin,
+                    TIMESTAMP(fecha, hora_fin) <= NOW() AS vencida
+                 FROM disponibilidad_visita
+                 WHERE id_disponibilidad = ?
+                 LIMIT 1`,
+                [idNormalizado]
+            );
 
         if (disponibilidades.length === 0) {
             return res.status(404).json({
-                mensaje: "La disponibilidad seleccionada no existe."
+                mensaje:
+                    "La disponibilidad seleccionada no existe."
             });
         }
 
-        const disponibilidad = disponibilidades[0];
+        const disponibilidad =
+            disponibilidades[0];
 
         if (!disponibilidad.estado) {
             return res.status(400).json({
-                mensaje: "La disponibilidad seleccionada no está activa."
+                mensaje:
+                    "La disponibilidad seleccionada no está activa."
             });
         }
 
-        if (cantidadPersonas > disponibilidad.cupos_disponibles) {
+        if (disponibilidad.vencida) {
             return res.status(400).json({
-                mensaje: "No hay suficientes cupos disponibles."
+                mensaje:
+                    "El horario seleccionado ya venció. Selecciona otro horario disponible."
             });
         }
 
-        const [resultado] = await pool.execute(
-            `INSERT INTO solicitud_visita
-            (
-                nombre_visitante,
-                correo_visitante,
-                telefono,
-                cantidad_personas,
-                motivo,
-                id_disponibilidad
+        if (
+            cantidadNormalizada >
+            Number(
+                disponibilidad.cupos_disponibles
             )
-            VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-                nombreVisitante,
-                correoVisitante,
-                telefono || null,
-                cantidadPersonas,
-                motivo || null,
-                idDisponibilidad
-            ]
-        );
+        ) {
+            return res.status(400).json({
+                mensaje:
+                    "No hay suficientes cupos disponibles."
+            });
+        }
+
+        const [resultado] =
+            await pool.execute(
+                `INSERT INTO solicitud_visita
+                (
+                    nombre_visitante,
+                    correo_visitante,
+                    telefono,
+                    cantidad_personas,
+                    motivo,
+                    id_disponibilidad
+                )
+                VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                    nombreVisitante,
+                    correoVisitante,
+                    telefono,
+                    cantidadNormalizada,
+                    motivo || null,
+                    idNormalizado
+                ]
+            );
 
         res.status(201).json({
-            mensaje: "Solicitud de visita enviada correctamente. Queda pendiente de aprobación. Nos comunicaremos contigo por correo electrónico o llamada telefónica para confirmar la visita.",
-            idSolicitud: resultado.insertId
+            mensaje:
+                "Solicitud de visita enviada correctamente. Queda pendiente de aprobación. Nos comunicaremos contigo por correo electrónico o llamada telefónica para confirmar la visita.",
+            idSolicitud:
+                resultado.insertId
         });
-
     } catch (error) {
-        console.error("Error al crear solicitud de visita:", error.message);
+        console.error(
+            "Error al crear solicitud de visita:",
+            error.message
+        );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al enviar la solicitud de visita."
+            mensaje:
+                "Ocurrió un error al enviar la solicitud de visita."
         });
     }
 }
@@ -239,7 +606,12 @@ async function listarSolicitudesVisita(req, res) {
                 sv.fecha_solicitud,
                 dv.fecha,
                 dv.hora_inicio,
-                dv.hora_fin
+                dv.hora_fin,
+                CASE
+                    WHEN TIMESTAMP(dv.fecha, dv.hora_fin) <= NOW()
+                    THEN TRUE
+                    ELSE FALSE
+                END AS vencida
              FROM solicitud_visita sv
              INNER JOIN disponibilidad_visita dv
                 ON sv.id_disponibilidad = dv.id_disponibilidad
@@ -247,65 +619,92 @@ async function listarSolicitudesVisita(req, res) {
         );
 
         res.json(solicitudes);
-
     } catch (error) {
-        console.error("Error al listar solicitudes:", error.message);
+        console.error(
+            "Error al listar solicitudes:",
+            error.message
+        );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al obtener las solicitudes."
+            mensaje:
+                "Ocurrió un error al obtener las solicitudes."
         });
     }
 }
 
 async function actualizarEstadoSolicitud(req, res) {
-    const conexion = await pool.getConnection();
+    const id =
+        Number(req.params.id);
+
+    const estado =
+        normalizarTexto(
+            req.body.estado
+        );
+
+    const estadosPermitidos = [
+        "Pendiente",
+        "Aprobada",
+        "Rechazada",
+        "Cancelada"
+    ];
+
+    if (!idValido(id)) {
+        return res.status(400).json({
+            mensaje:
+                "El identificador de la solicitud no es válido."
+        });
+    }
+
+    if (
+        !estadosPermitidos.includes(
+            estado
+        )
+    ) {
+        return res.status(400).json({
+            mensaje:
+                "Estado de solicitud no válido."
+        });
+    }
+
+    let conexion;
 
     try {
-        const { id } = req.params;
-        const { estado } = req.body;
-
-        const estadosPermitidos = [
-            "Pendiente",
-            "Aprobada",
-            "Rechazada",
-            "Cancelada"
-        ];
-
-        if (!estadosPermitidos.includes(estado)) {
-            return res.status(400).json({
-                mensaje: "Estado de solicitud no válido."
-            });
-        }
+        conexion =
+            await pool.getConnection();
 
         await conexion.beginTransaction();
 
-        const [solicitudes] = await conexion.execute(
-            `SELECT
-                id_solicitud,
-                estado,
-                cantidad_personas,
-                id_disponibilidad
-             FROM solicitud_visita
-             WHERE id_solicitud = ?
-             FOR UPDATE`,
-            [id]
-        );
+        const [solicitudes] =
+            await conexion.execute(
+                `SELECT
+                    id_solicitud,
+                    estado,
+                    cantidad_personas,
+                    id_disponibilidad
+                 FROM solicitud_visita
+                 WHERE id_solicitud = ?
+                 FOR UPDATE`,
+                [id]
+            );
 
         if (solicitudes.length === 0) {
             await conexion.rollback();
 
             return res.status(404).json({
-                mensaje: "Solicitud de visita no encontrada."
+                mensaje:
+                    "Solicitud de visita no encontrada."
             });
         }
 
-        const solicitud = solicitudes[0];
+        const solicitud =
+            solicitudes[0];
 
         if (solicitud.estado === estado) {
             await conexion.rollback();
 
             return res.status(400).json({
-                mensaje: `La solicitud ya se encuentra en estado ${estado}.`
+                mensaje:
+                    `La solicitud ya se encuentra en estado ${estado}.`
             });
         }
 
@@ -313,30 +712,71 @@ async function actualizarEstadoSolicitud(req, res) {
             estado === "Aprobada" &&
             solicitud.estado !== "Aprobada"
         ) {
-            const [disponibilidades] = await conexion.execute(
-                `SELECT cupos_disponibles
-                 FROM disponibilidad_visita
-                 WHERE id_disponibilidad = ?
-                 FOR UPDATE`,
-                [solicitud.id_disponibilidad]
-            );
+            const [disponibilidades] =
+                await conexion.execute(
+                    `SELECT
+                        cupos_disponibles,
+                        estado,
+                        fecha,
+                        hora_inicio,
+                        hora_fin,
+                        TIMESTAMP(fecha, hora_fin) <= NOW() AS vencida
+                     FROM disponibilidad_visita
+                     WHERE id_disponibilidad = ?
+                     FOR UPDATE`,
+                    [
+                        solicitud.id_disponibilidad
+                    ]
+                );
 
-            if (disponibilidades.length === 0) {
+            if (
+                disponibilidades.length === 0
+            ) {
                 await conexion.rollback();
 
                 return res.status(404).json({
-                    mensaje: "Disponibilidad no encontrada."
+                    mensaje:
+                        "Disponibilidad no encontrada."
+                });
+            }
+
+            const disponibilidad =
+                disponibilidades[0];
+
+            if (!disponibilidad.estado) {
+                await conexion.rollback();
+
+                return res.status(400).json({
+                    mensaje:
+                        "No se puede aprobar la solicitud porque el horario ya no está activo."
+                });
+            }
+
+            if (disponibilidad.vencida) {
+                await conexion.rollback();
+
+                return res.status(400).json({
+                    mensaje:
+                        "No se puede aprobar esta solicitud porque el horario de visita ya venció."
                 });
             }
 
             const cupos =
-                disponibilidades[0].cupos_disponibles;
+                Number(
+                    disponibilidad.cupos_disponibles
+                );
 
-            if (cupos < solicitud.cantidad_personas) {
+            if (
+                cupos <
+                Number(
+                    solicitud.cantidad_personas
+                )
+            ) {
                 await conexion.rollback();
 
                 return res.status(400).json({
-                    mensaje: "No existen suficientes cupos para aprobar esta solicitud."
+                    mensaje:
+                        "No existen suficientes cupos para aprobar esta solicitud."
                 });
             }
 
@@ -372,19 +812,17 @@ async function actualizarEstadoSolicitud(req, res) {
             `UPDATE solicitud_visita
              SET estado = ?
              WHERE id_solicitud = ?`,
-            [estado, id]
+            [
+                estado,
+                id
+            ]
         );
 
         await conexion.commit();
 
-        await conexion.commit();
-
-
         let correoEnviado = false;
 
-
         try {
-
             const [datosSolicitud] =
                 await conexion.execute(
                     `SELECT
@@ -409,131 +847,103 @@ async function actualizarEstadoSolicitud(req, res) {
                             '%H:%i'
                         ) AS hora_fin
 
-                    FROM solicitud_visita sv
+                     FROM solicitud_visita sv
 
-                    INNER JOIN disponibilidad_visita dv
+                     INNER JOIN disponibilidad_visita dv
                         ON dv.id_disponibilidad =
-                        sv.id_disponibilidad
+                           sv.id_disponibilidad
 
-                    WHERE sv.id_solicitud = ?
-
-                    LIMIT 1`,
-                    [
-                        id
-                    ]
+                     WHERE sv.id_solicitud = ?
+                     LIMIT 1`,
+                    [id]
                 );
 
-
-            const solicitud =
+            const datos =
                 datosSolicitud[0];
 
-
             if (
-                solicitud &&
-                solicitud.correo_visitante
+                datos &&
+                datos.correo_visitante
             ) {
-
                 let asunto = "";
-                let texto = "";
+                let textoCorreo = "";
 
-
-                if (
-                    estado === "Aprobada"
-                ) {
-
+                if (estado === "Aprobada") {
                     asunto =
                         "Solicitud de visita aprobada";
 
+                    textoCorreo =
+`Hola ${datos.nombre_visitante},
 
-                    texto =
-        `Hola ${solicitud.nombre_visitante},
+Tu solicitud de visita al Mesón Buen Samaritano ha sido aprobada.
 
-        Tu solicitud de visita al Mesón Buen Samaritano ha sido aprobada.
+Fecha: ${datos.fecha_visita}
+Horario: ${datos.hora_inicio} - ${datos.hora_fin}
+Cantidad de personas: ${datos.cantidad_personas}
 
-        Fecha: ${solicitud.fecha_visita}
-        Horario: ${solicitud.hora_inicio} - ${solicitud.hora_fin}
-        Cantidad de personas: ${solicitud.cantidad_personas}
+Tu visita queda confirmada para la fecha y horario indicados.
 
-        Tu visita queda confirmada para la fecha y horario indicados.
+Si es necesario, personal del hogar podrá comunicarse contigo por teléfono.
 
-        Si es necesario, personal del hogar podrá comunicarse contigo por teléfono.
-
-        Mesón Buen Samaritano`;
-
+Mesón Buen Samaritano`;
                 } else if (
                     estado === "Rechazada"
                 ) {
-
                     asunto =
                         "Actualización de solicitud de visita";
 
+                    textoCorreo =
+`Hola ${datos.nombre_visitante},
 
-                    texto =
-        `Hola ${solicitud.nombre_visitante},
+Te informamos que tu solicitud de visita al Mesón Buen Samaritano no pudo ser aprobada.
 
-        Te informamos que tu solicitud de visita al Mesón Buen Samaritano no pudo ser aprobada.
+Puedes consultar nuevamente los horarios disponibles y realizar otra solicitud.
 
-        Puedes consultar nuevamente los horarios disponibles y realizar otra solicitud.
+Gracias por tu comprensión.
 
-        Gracias por tu comprensión.
-
-        Mesón Buen Samaritano`;
-
+Mesón Buen Samaritano`;
                 } else if (
                     estado === "Cancelada"
                 ) {
-
                     asunto =
                         "Visita cancelada";
 
+                    textoCorreo =
+`Hola ${datos.nombre_visitante},
 
-                    texto =
-        `Hola ${solicitud.nombre_visitante},
+Te informamos que la visita programada para el ${datos.fecha_visita}, de ${datos.hora_inicio} a ${datos.hora_fin}, ha sido cancelada.
 
-        Te informamos que la visita programada para el ${solicitud.fecha_visita}, de ${solicitud.hora_inicio} a ${solicitud.hora_fin}, ha sido cancelada.
+Si deseas realizar una nueva visita, puedes consultar nuevamente los horarios disponibles.
 
-        Si deseas realizar una nueva visita, puedes consultar nuevamente los horarios disponibles.
-
-        Mesón Buen Samaritano`;
-
+Mesón Buen Samaritano`;
                 }
-
 
                 if (
                     asunto &&
-                    texto
+                    textoCorreo
                 ) {
-
                     console.log(
                         "Intentando enviar correo de visita a:",
-                        solicitud.correo_visitante
+                        datos.correo_visitante
                     );
-
 
                     await enviarCorreo({
                         para:
-                            solicitud.correo_visitante,
-
+                            datos.correo_visitante,
                         asunto,
-
-                        texto
+                        texto:
+                            textoCorreo
                     });
-
 
                     correoEnviado = true;
 
-
                     console.log(
                         "Correo de visita enviado correctamente a:",
-                        solicitud.correo_visitante
+                        datos.correo_visitante
                     );
-
                 }
-
             }
-
         } catch (errorCorreo) {
-
             console.error(
                 "ERROR AL ENVIAR CORREO DE VISITA:"
             );
@@ -541,22 +951,27 @@ async function actualizarEstadoSolicitud(req, res) {
             console.error(
                 errorCorreo
             );
-
         }
 
-
         return res.json({
-
             mensaje:
                 correoEnviado
                     ? `Solicitud ${estado.toLowerCase()} correctamente. Se envió una notificación por correo electrónico.`
                     : `Solicitud ${estado.toLowerCase()} correctamente, pero no fue posible enviar la notificación por correo electrónico.`,
 
             correoEnviado
-
         });
-        } catch (error) {
-        await conexion.rollback();
+    } catch (error) {
+        if (conexion) {
+            try {
+                await conexion.rollback();
+            } catch (errorRollback) {
+                console.error(
+                    "Error al revertir la transacción:",
+                    errorRollback.message
+                );
+            }
+        }
 
         console.error(
             "Error al actualizar solicitud:",
@@ -564,11 +979,13 @@ async function actualizarEstadoSolicitud(req, res) {
         );
 
         res.status(500).json({
-            mensaje: "Ocurrió un error al actualizar la solicitud."
+            mensaje:
+                "Ocurrió un error al actualizar la solicitud."
         });
-
     } finally {
-        conexion.release();
+        if (conexion) {
+            conexion.release();
+        }
     }
 }
 

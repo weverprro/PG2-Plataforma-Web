@@ -5477,10 +5477,12 @@ main h1 {
 
 .contacto-imagen {
     width: 100%;
-    max-height: 360px;
-    margin-top: 20px;
-    object-fit: cover;
-    border-radius: 12px;
+    height: auto;
+    max-height: 340px;
+    object-fit: contain;
+    display: block;
+    margin-top: 24px;
+    border-radius: 14px;
 }
 
 .contacto-formulario-card {

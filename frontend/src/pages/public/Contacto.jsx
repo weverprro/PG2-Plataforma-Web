@@ -1,11 +1,17 @@
 import {
     useEffect,
+    useRef,
     useState
 } from "react";
+
 
 import {
     apiFetch
 } from "../../services/api";
+
+
+import TurnstileWidget
+    from "../../components/common/TurnstileWidget";
 
 
 const formularioInicial = {
@@ -24,6 +30,7 @@ function Contacto() {
         setContenido
     ] = useState(null);
 
+
     const [
         formulario,
         setFormulario
@@ -31,20 +38,33 @@ function Contacto() {
         formularioInicial
     );
 
+
+    const [
+        turnstileToken,
+        setTurnstileToken
+    ] = useState("");
+
+
     const [
         enviando,
         setEnviando
     ] = useState(false);
+
 
     const [
         mensajeExito,
         setMensajeExito
     ] = useState("");
 
+
     const [
         error,
         setError
     ] = useState("");
+
+
+    const turnstileRef =
+        useRef(null);
 
 
     useEffect(() => {
@@ -125,8 +145,9 @@ function Contacto() {
 
 
         setFormulario(
-            (anterior) => ({
+            anterior => ({
                 ...anterior,
+
                 [name]:
                     value
             })
@@ -142,11 +163,24 @@ function Contacto() {
         evento.preventDefault();
 
 
+        setMensajeExito("");
+        setError("");
+
+
+        if (!turnstileToken) {
+
+            setError(
+                "Completa la verificación de seguridad antes de enviar el mensaje."
+            );
+
+            return;
+
+        }
+
+
         try {
 
             setEnviando(true);
-            setMensajeExito("");
-            setError("");
 
 
             const respuesta =
@@ -157,9 +191,12 @@ function Contacto() {
                             "POST",
 
                         body:
-                            JSON.stringify(
-                                formulario
-                            )
+                            JSON.stringify({
+                                ...formulario,
+
+                                turnstileToken:
+                                    turnstileToken
+                            })
                     }
                 );
 
@@ -175,6 +212,12 @@ function Contacto() {
             );
 
 
+            setTurnstileToken("");
+
+
+            turnstileRef.current?.reset();
+
+
         } catch (error) {
 
             console.error(
@@ -186,6 +229,19 @@ function Contacto() {
                 error.message ||
                 "No fue posible enviar el mensaje."
             );
+
+
+            /*
+             * Los tokens de Turnstile
+             * son de un solo uso.
+             *
+             * Si ocurre un error,
+             * generamos uno nuevo.
+             */
+            setTurnstileToken("");
+
+
+            turnstileRef.current?.reset();
 
 
         } finally {
@@ -234,6 +290,7 @@ function Contacto() {
 
         <main className="pagina-contacto">
 
+
             <section className="contacto-encabezado">
 
                 <div className="contacto-encabezado-contenido">
@@ -242,20 +299,26 @@ function Contacto() {
                         Contacto
                     </span>
 
+
                     <h1>
+
                         {
                             contenido?.titulo ||
                             "Comunícate con nosotros"
                         }
+
                     </h1>
 
+
                     <p>
+
                         Estamos disponibles
                         para atender consultas
                         relacionadas con
                         donaciones, visitas,
                         voluntariado y otras
                         formas de apoyo.
+
                     </p>
 
                 </div>
@@ -307,10 +370,12 @@ function Contacto() {
                         ) : (
 
                             <p>
+
                                 Puedes utilizar el
                                 formulario para
                                 comunicarte con el
                                 Mesón Buen Samaritano.
+
                             </p>
 
                         )}
@@ -344,10 +409,13 @@ function Contacto() {
                             Envíanos un mensaje
                         </h2>
 
+
                         <p>
+
                             Completa el formulario
                             y nuestro personal podrá
                             comunicarse contigo.
+
                         </p>
 
 
@@ -381,11 +449,13 @@ function Contacto() {
                             }
                         >
 
+
                             <div className="campo-formulario">
 
                                 <label>
                                     Nombre
                                 </label>
+
 
                                 <input
                                     type="text"
@@ -411,6 +481,7 @@ function Contacto() {
                                     Correo electrónico
                                 </label>
 
+
                                 <input
                                     type="email"
                                     name="correo"
@@ -434,6 +505,7 @@ function Contacto() {
                                 <label>
                                     Teléfono
                                 </label>
+
 
                                 <input
                                     type="tel"
@@ -459,6 +531,7 @@ function Contacto() {
                                     Asunto
                                 </label>
 
+
                                 <input
                                     type="text"
                                     name="asunto"
@@ -483,6 +556,7 @@ function Contacto() {
                                     Mensaje
                                 </label>
 
+
                                 <textarea
                                     name="mensaje"
 
@@ -502,12 +576,61 @@ function Contacto() {
                             </div>
 
 
+                            <div className="campo-formulario">
+
+                                <TurnstileWidget
+                                    ref={
+                                        turnstileRef
+                                    }
+
+                                    onVerify={token => {
+                                            setTurnstileToken(token);
+                                        }
+                                    }
+
+                                    onExpire={
+                                        () => {
+
+                                            setTurnstileToken(
+                                                ""
+                                            );
+
+                                            setError(
+                                                "La verificación de seguridad expiró. Verifica nuevamente."
+                                            );
+
+                                        }
+                                    }
+
+                                    onError={
+                                        () => {
+
+                                            setTurnstileToken(
+                                                ""
+                                            );
+
+                                            setError(
+                                                "No fue posible completar la verificación de seguridad."
+                                            );
+
+                                        }
+                                    }
+                                />
+
+                            </div>
+
+
                             <button
                                 type="submit"
                                 className="contacto-boton"
 
                                 disabled={
-                                    enviando
+                                    enviando ||
+                                    !turnstileToken ||
+                                    !formulario.nombre.trim() ||
+                                    !formulario.correo.trim() ||
+                                    !formulario.asunto.trim() ||
+                                    !formulario.mensaje.trim()
                                 }
                             >
 

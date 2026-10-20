@@ -1,12 +1,5 @@
-import {
-    useEffect,
-    useState
-} from "react";
-
-import {
-    apiFetch
-} from "../../services/api";
-
+import { useEffect, useState } from "react";
+import { apiFetch } from "../../services/api";
 
 const actividadInicial = {
     titulo: "",
@@ -17,247 +10,134 @@ const actividadInicial = {
     cuposDisponibles: 1
 };
 
-
 function VoluntariadoPanel() {
-
-    const [
-        actividades,
-        setActividades
-    ] = useState([]);
-
-    const [
-        solicitudes,
-        setSolicitudes
-    ] = useState([]);
-
-    const [
-        formulario,
-        setFormulario
-    ] = useState(
-        actividadInicial
-    );
-
-    const [
-        cargando,
-        setCargando
-    ] = useState(true);
-
-    const [
-        guardando,
-        setGuardando
-    ] = useState(false);
-
-    const [
-        mensaje,
-        setMensaje
-    ] = useState("");
-
-    const [
-        error,
-        setError
-    ] = useState("");
-
+    const [actividades, setActividades] = useState([]);
+    const [solicitudes, setSolicitudes] = useState([]);
+    const [formulario, setFormulario] = useState(actividadInicial);
+    const [cargando, setCargando] = useState(true);
+    const [guardando, setGuardando] = useState(false);
+    const [mensaje, setMensaje] = useState("");
+    const [error, setError] = useState("");
 
     useEffect(() => {
-
         cargarDatos();
-
     }, []);
 
-
     async function cargarDatos() {
-
         try {
-
             setCargando(true);
             setError("");
-
 
             const [
                 respuestaActividades,
                 respuestaSolicitudes
             ] = await Promise.all([
-
-                apiFetch(
-                    "/voluntariado/actividades"
-                ),
-
-                apiFetch(
-                    "/voluntariado/solicitudes"
-                )
-
+                apiFetch("/voluntariado/actividades"),
+                apiFetch("/voluntariado/solicitudes")
             ]);
 
-
             setActividades(
-                Array.isArray(
-                    respuestaActividades
-                )
+                Array.isArray(respuestaActividades)
                     ? respuestaActividades
                     : []
             );
 
-
             setSolicitudes(
-                Array.isArray(
-                    respuestaSolicitudes
-                )
+                Array.isArray(respuestaSolicitudes)
                     ? respuestaSolicitudes
                     : []
             );
-
         } catch (error) {
-
             console.error(error);
 
             setError(
                 error.message ||
                 "No fue posible cargar la gestión de voluntariado."
             );
-
         } finally {
-
             setCargando(false);
         }
     }
 
+    function manejarCambio(evento) {
+        const { name, value } = evento.target;
 
-    function manejarCambio(
-        evento
-    ) {
-
-        const {
-            name,
-            value
-        } = evento.target;
-
-
-        setFormulario(
-            anterior => ({
-
-                ...anterior,
-
-                [name]:
-                    value
-
-            })
-        );
+        setFormulario(anterior => ({
+            ...anterior,
+            [name]: value
+        }));
     }
 
-
-    async function crearActividad(
-        evento
-    ) {
-
+    async function crearActividad(evento) {
         evento.preventDefault();
 
-
         try {
-
             setGuardando(true);
             setMensaje("");
             setError("");
-
 
             await apiFetch(
                 "/voluntariado/actividades",
                 {
                     method: "POST",
-
-                    body:
-                        JSON.stringify({
-
-                            titulo:
-                                formulario.titulo,
-
-                            descripcion:
-                                formulario.descripcion,
-
-                            fecha:
-                                formulario.fecha,
-
-                            horaInicio:
-                                formulario.horaInicio ||
-                                null,
-
-                            horaFin:
-                                formulario.horaFin ||
-                                null,
-
-                            cuposDisponibles:
-                                Number(
-                                    formulario.cuposDisponibles
-                                )
-
-                        })
+                    body: JSON.stringify({
+                        titulo: formulario.titulo,
+                        descripcion: formulario.descripcion,
+                        fecha: formulario.fecha,
+                        horaInicio:
+                            formulario.horaInicio || null,
+                        horaFin:
+                            formulario.horaFin || null,
+                        cuposDisponibles:
+                            Number(formulario.cuposDisponibles)
+                    })
                 }
             );
 
-
-            setFormulario(
-                actividadInicial
-            );
-
+            setFormulario(actividadInicial);
 
             await cargarDatos();
-
 
             setMensaje(
                 "Actividad de voluntariado creada correctamente."
             );
-
         } catch (error) {
-
             console.error(error);
 
             setError(
                 error.message ||
                 "No fue posible crear la actividad."
             );
-
         } finally {
-
             setGuardando(false);
         }
     }
-
 
     async function cambiarEstadoSolicitud(
         idSolicitud,
         nuevoEstado
     ) {
-
         try {
-
             setMensaje("");
             setError("");
 
-
-            const respuesta =
-                await apiFetch(
-                    `/voluntariado/solicitudes/${idSolicitud}/estado`,
-                    {
-                        method: "PUT",
-
-                        body:
-                            JSON.stringify({
-                                estado:
-                                    nuevoEstado
-                            })
-                    }
-                );
-
+            const respuesta = await apiFetch(
+                `/voluntariado/solicitudes/${idSolicitud}/estado`,
+                {
+                    method: "PUT",
+                    body: JSON.stringify({
+                        estado: nuevoEstado
+                    })
+                }
+            );
 
             await cargarDatos();
-
 
             setMensaje(
                 respuesta.mensaje ||
                 `Solicitud actualizada a ${nuevoEstado}.`
             );
-
         } catch (error) {
-
             console.error(error);
 
             setError(
@@ -267,24 +147,14 @@ function VoluntariadoPanel() {
         }
     }
 
-
-    function formatearFecha(
-        fecha
-    ) {
-
+    function formatearFecha(fecha) {
         if (!fecha) {
             return "";
         }
 
-
-        const [
-            anio,
-            mes,
-            dia
-        ] = fecha
+        const [anio, mes, dia] = fecha
             .substring(0, 10)
             .split("-");
-
 
         return new Date(
             Number(anio),
@@ -300,86 +170,95 @@ function VoluntariadoPanel() {
         );
     }
 
-
-    function formatearHora(
-        hora
-    ) {
-
+    function formatearHora(hora) {
         if (!hora) {
             return "";
         }
 
-
-        const [
-            horaTexto,
-            minutos
-        ] = hora.split(":");
-
+        const [horaTexto, minutos] =
+            hora.split(":");
 
         let horas =
             Number(horaTexto);
-
 
         const periodo =
             horas >= 12
                 ? "p. m."
                 : "a. m.";
 
-
         horas =
             horas % 12 || 12;
-
 
         return `${horas}:${minutos} ${periodo}`;
     }
 
+    function estaVencida(solicitud) {
+        return Number(solicitud.vencida) === 1;
+    }
 
-    function obtenerClaseEstado(
-        estado
-    ) {
+    function obtenerEstadoVisual(solicitud) {
+        if (
+            solicitud.estado === "Pendiente" &&
+            estaVencida(solicitud)
+        ) {
+            return "Vencida";
+        }
 
+        return solicitud.estado;
+    }
+
+    function obtenerClaseEstado(estado) {
         const valor =
             estado?.toLowerCase();
-
 
         if (valor === "aprobada") {
             return "estado-aprobado";
         }
 
-
         if (
             valor === "rechazada" ||
-            valor === "cancelada"
+            valor === "cancelada" ||
+            valor === "vencida"
         ) {
             return "estado-rechazado";
         }
 
-
         return "estado-pendiente";
     }
 
+    function obtenerFechaMinima() {
+        const hoy = new Date();
+
+        const anio =
+            hoy.getFullYear();
+
+        const mes =
+            String(
+                hoy.getMonth() + 1
+            ).padStart(2, "0");
+
+        const dia =
+            String(
+                hoy.getDate()
+            ).padStart(2, "0");
+
+        return `${anio}-${mes}-${dia}`;
+    }
 
     if (cargando) {
-
         return (
             <div className="panel-modulo">
-
                 <p>
                     Cargando voluntariado...
                 </p>
-
             </div>
         );
     }
 
-
     return (
         <div className="panel-modulo">
-
             <div className="panel-cabecera">
-
                 <div>
-
                     <span>
                         Administración
                     </span>
@@ -389,272 +268,159 @@ function VoluntariadoPanel() {
                     </h1>
 
                     <p>
-                        Administra actividades y
-                        solicitudes de voluntariado.
+                        Administra actividades y solicitudes de voluntariado.
                     </p>
-
                 </div>
-
             </div>
 
-
             {mensaje && (
-
                 <div className="mensaje-exito">
                     {mensaje}
                 </div>
-
             )}
 
-
             {error && (
-
                 <div className="mensaje-error">
                     {error}
                 </div>
-
             )}
 
-
-            {/* =========================
-                CREAR ACTIVIDAD
-            ========================= */}
-
+            {/* CREAR ACTIVIDAD */}
             <section className="panel-seccion">
-
                 <div className="panel-seccion-titulo">
-
                     <h2>
                         Crear actividad
                     </h2>
 
                     <p>
-                        Publica una nueva actividad
-                        para recibir voluntarios.
+                        Publica una nueva actividad para recibir voluntarios.
                     </p>
-
                 </div>
-
 
                 <form
                     className="voluntariado-panel-formulario"
-
-                    onSubmit={
-                        crearActividad
-                    }
+                    onSubmit={crearActividad}
                 >
-
                     <div className="campo-formulario">
-
                         <label>
                             Título
                         </label>
 
                         <input
                             type="text"
-
                             name="titulo"
-
-                            value={
-                                formulario.titulo
-                            }
-
-                            onChange={
-                                manejarCambio
-                            }
-
+                            value={formulario.titulo}
+                            onChange={manejarCambio}
                             required
                         />
-
                     </div>
 
-
                     <div className="campo-formulario">
-
                         <label>
                             Fecha
                         </label>
 
                         <input
                             type="date"
-
                             name="fecha"
-
-                            value={
-                                formulario.fecha
-                            }
-
-                            onChange={
-                                manejarCambio
-                            }
-
+                            min={obtenerFechaMinima()}
+                            value={formulario.fecha}
+                            onChange={manejarCambio}
                             required
                         />
-
                     </div>
 
-
                     <div className="campo-formulario">
-
                         <label>
                             Hora de inicio
                         </label>
 
                         <input
                             type="time"
-
                             name="horaInicio"
-
-                            value={
-                                formulario.horaInicio
-                            }
-
-                            onChange={
-                                manejarCambio
-                            }
+                            value={formulario.horaInicio}
+                            onChange={manejarCambio}
                         />
-
                     </div>
 
-
                     <div className="campo-formulario">
-
                         <label>
                             Hora de finalización
                         </label>
 
                         <input
                             type="time"
-
                             name="horaFin"
-
-                            value={
-                                formulario.horaFin
-                            }
-
-                            onChange={
-                                manejarCambio
-                            }
+                            value={formulario.horaFin}
+                            onChange={manejarCambio}
                         />
-
                     </div>
 
-
                     <div className="campo-formulario">
-
                         <label>
                             Cupos
                         </label>
 
                         <input
                             type="number"
-
                             min="1"
-
                             name="cuposDisponibles"
-
-                            value={
-                                formulario.cuposDisponibles
-                            }
-
-                            onChange={
-                                manejarCambio
-                            }
-
+                            value={formulario.cuposDisponibles}
+                            onChange={manejarCambio}
                             required
                         />
-
                     </div>
 
-
                     <div className="campo-formulario voluntariado-descripcion">
-
                         <label>
                             Descripción
                         </label>
 
                         <textarea
                             name="descripcion"
-
                             rows="5"
-
-                            value={
-                                formulario.descripcion
-                            }
-
-                            onChange={
-                                manejarCambio
-                            }
-
+                            value={formulario.descripcion}
+                            onChange={manejarCambio}
                             required
                         />
-
                     </div>
 
-
                     <div className="voluntariado-panel-boton">
-
                         <button
                             type="submit"
-
                             className="boton-principal"
-
-                            disabled={
-                                guardando
-                            }
+                            disabled={guardando}
                         >
-
                             {
                                 guardando
                                     ? "Creando..."
                                     : "Crear actividad"
                             }
-
                         </button>
-
                     </div>
-
                 </form>
-
             </section>
 
-
-            {/* =========================
-                ACTIVIDADES
-            ========================= */}
-
+            {/* ACTIVIDADES */}
             <section className="panel-seccion">
-
                 <div className="panel-seccion-titulo">
-
                     <h2>
                         Actividades disponibles
                     </h2>
-
                 </div>
 
-
                 {actividades.length === 0 ? (
-
                     <div className="panel-vacio">
                         No hay actividades disponibles.
                     </div>
-
                 ) : (
-
                     <div className="panel-actividades-grid">
-
                         {actividades.map(
                             actividad => (
-
                                 <article
                                     className="panel-actividad-card"
-
-                                    key={
-                                        actividad.id_actividad
-                                    }
+                                    key={actividad.id_actividad}
                                 >
-
                                     <span>
                                         {
                                             formatearFecha(
@@ -663,25 +429,16 @@ function VoluntariadoPanel() {
                                         }
                                     </span>
 
-
                                     <h3>
-                                        {
-                                            actividad.titulo
-                                        }
+                                        {actividad.titulo}
                                     </h3>
 
-
                                     <p>
-                                        {
-                                            actividad.descripcion
-                                        }
+                                        {actividad.descripcion}
                                     </p>
 
-
                                     {actividad.hora_inicio && (
-
                                         <div className="panel-actividad-horario">
-
                                             {
                                                 formatearHora(
                                                     actividad.hora_inicio
@@ -698,14 +455,10 @@ function VoluntariadoPanel() {
                                                     }
                                                 </>
                                             )}
-
                                         </div>
-
                                     )}
 
-
                                     <div className="panel-actividad-cupos">
-
                                         <strong>
                                             {
                                                 actividad.cupos_disponibles
@@ -715,258 +468,244 @@ function VoluntariadoPanel() {
                                         <span>
                                             cupos disponibles
                                         </span>
-
                                     </div>
-
                                 </article>
-
                             )
                         )}
-
                     </div>
-
                 )}
-
             </section>
 
-
-            {/* =========================
-                SOLICITUDES
-            ========================= */}
-
+            {/* SOLICITUDES */}
             <section className="panel-seccion">
-
                 <div className="panel-seccion-titulo">
-
                     <h2>
                         Solicitudes de voluntariado
                     </h2>
 
                     <p>
-                        Revisa las solicitudes
-                        enviadas desde la página
-                        pública.
+                        Revisa las solicitudes enviadas desde la página pública.
                     </p>
-
                 </div>
 
-
                 {solicitudes.length === 0 ? (
-
                     <div className="panel-vacio">
                         No hay solicitudes de voluntariado.
                     </div>
-
                 ) : (
-
                     <div className="solicitudes-voluntariado-listado">
-
                         {solicitudes.map(
-                            solicitud => (
+                            solicitud => {
+                                const vencida =
+                                    estaVencida(solicitud);
 
-                                <article
-                                    className="solicitud-voluntariado-card"
+                                const estadoVisual =
+                                    obtenerEstadoVisual(
+                                        solicitud
+                                    );
 
-                                    key={
-                                        solicitud.id_solicitud
-                                    }
-                                >
+                                const nombreActividad =
+                                    solicitud.actividad ||
+                                    solicitud.titulo_actividad ||
+                                    solicitud.titulo ||
+                                    "Actividad de voluntariado";
 
-                                    <div className="solicitud-voluntariado-cabecera">
-
-                                        <div>
-
-                                            <h3>
-                                                {
-                                                    solicitud.nombre_voluntario
-                                                }
-                                            </h3>
-
-                                            <span>
-                                                {
-                                                    solicitud.correo ||
-                                                    solicitud.correo_voluntario ||
-                                                    "Correo no registrado"
-
-                                                }
-                                            </span>
-
-                                        </div>
-
-
-                                        <span
-                                            className={
-                                                `estado-solicitud ${
-                                                    obtenerClaseEstado(
-                                                        solicitud.estado
-                                                    )
-                                                }`
-                                            }
-                                        >
-                                            {
-                                                solicitud.estado
-                                            }
-                                        </span>
-
-                                    </div>
-
-
-                                    <div className="solicitud-voluntariado-datos">
-
-                                        <div>
-
-                                            <strong>
-                                                Teléfono
-                                            </strong>
-
-                                            <span>
-                                                {
-                                                    solicitud.telefono ||
-                                                    "No registrado"
-                                                }
-                                            </span>
-
-                                        </div>
-
-
-                                        <div>
-
-                                            <strong>
-                                                Actividad
-                                            </strong>
-
-                                            <span>
-                                                {
-                                                    solicitud.titulo_actividad ||
-                                                    solicitud.titulo ||
-                                                    "Actividad de voluntariado"
-                                                }
-                                            </span>
-
-                                        </div>
-
-
-                                        {solicitud.fecha && (
-
+                                return (
+                                    <article
+                                        className="solicitud-voluntariado-card"
+                                        key={solicitud.id_solicitud}
+                                    >
+                                        <div className="solicitud-voluntariado-cabecera">
                                             <div>
+                                                <h3>
+                                                    {
+                                                        solicitud.nombre_voluntario
+                                                    }
+                                                </h3>
 
+                                                <span>
+                                                    {
+                                                        solicitud.correo ||
+                                                        solicitud.correo_voluntario ||
+                                                        "Correo no registrado"
+                                                    }
+                                                </span>
+                                            </div>
+
+                                            <span
+                                                className={
+                                                    `estado-solicitud ${
+                                                        obtenerClaseEstado(
+                                                            estadoVisual
+                                                        )
+                                                    }`
+                                                }
+                                            >
+                                                {estadoVisual}
+                                            </span>
+                                        </div>
+
+                                        <div className="solicitud-voluntariado-datos">
+                                            <div>
                                                 <strong>
-                                                    Fecha
+                                                    Teléfono
                                                 </strong>
 
                                                 <span>
                                                     {
-                                                        formatearFecha(
-                                                            solicitud.fecha
-                                                        )
+                                                        solicitud.telefono ||
+                                                        "No registrado"
                                                     }
                                                 </span>
-
                                             </div>
 
+                                            <div>
+                                                <strong>
+                                                    Actividad
+                                                </strong>
+
+                                                <span>
+                                                    {nombreActividad}
+                                                </span>
+                                            </div>
+
+                                            {solicitud.fecha && (
+                                                <div>
+                                                    <strong>
+                                                        Fecha
+                                                    </strong>
+
+                                                    <span>
+                                                        {
+                                                            formatearFecha(
+                                                                solicitud.fecha
+                                                            )
+                                                        }
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {solicitud.hora_inicio && (
+                                                <div>
+                                                    <strong>
+                                                        Horario
+                                                    </strong>
+
+                                                    <span>
+                                                        {
+                                                            formatearHora(
+                                                                solicitud.hora_inicio
+                                                            )
+                                                        }
+
+                                                        {solicitud.hora_fin && (
+                                                            <>
+                                                                {" - "}
+                                                                {
+                                                                    formatearHora(
+                                                                        solicitud.hora_fin
+                                                                    )
+                                                                }
+                                                            </>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {solicitud.observaciones && (
+                                            <div className="solicitud-motivo">
+                                                <strong>
+                                                    Observaciones
+                                                </strong>
+
+                                                <p>
+                                                    {
+                                                        solicitud.observaciones
+                                                    }
+                                                </p>
+                                            </div>
                                         )}
 
-                                    </div>
+                                        {
+                                            solicitud.estado ===
+                                            "Pendiente" &&
+                                            vencida && (
+                                                <div className="solicitud-motivo">
+                                                    <strong>
+                                                        Solicitud vencida
+                                                    </strong>
 
+                                                    <p>
+                                                        La fecha y hora de esta actividad ya pasaron. La solicitud ya no puede ser aprobada.
+                                                    </p>
+                                                </div>
+                                            )
+                                        }
 
-                                    {solicitud.observaciones && (
+                                        {
+                                            solicitud.estado ===
+                                            "Pendiente" &&
+                                            !vencida && (
+                                                <div className="solicitud-visita-acciones">
+                                                    <button
+                                                        type="button"
+                                                        className="boton-aprobar"
+                                                        onClick={() =>
+                                                            cambiarEstadoSolicitud(
+                                                                solicitud.id_solicitud,
+                                                                "Aprobada"
+                                                            )
+                                                        }
+                                                    >
+                                                        Aprobar
+                                                    </button>
 
-                                        <div className="solicitud-motivo">
+                                                    <button
+                                                        type="button"
+                                                        className="boton-rechazar"
+                                                        onClick={() =>
+                                                            cambiarEstadoSolicitud(
+                                                                solicitud.id_solicitud,
+                                                                "Rechazada"
+                                                            )
+                                                        }
+                                                    >
+                                                        Rechazar
+                                                    </button>
+                                                </div>
+                                            )
+                                        }
 
-                                            <strong>
-                                                Observaciones
-                                            </strong>
-
-                                            <p>
-                                                {
-                                                    solicitud.observaciones
-                                                }
-                                            </p>
-
-                                        </div>
-
-                                    )}
-
-
-                                    {solicitud.estado ===
-                                        "Pendiente" && (
-
-                                        <div className="solicitud-visita-acciones">
-
-                                            <button
-                                                type="button"
-
-                                                className="boton-aprobar"
-
-                                                onClick={() =>
-                                                    cambiarEstadoSolicitud(
-                                                        solicitud.id_solicitud,
-                                                        "Aprobada"
-                                                    )
-                                                }
-                                            >
-                                                Aprobar
-                                            </button>
-
-
-                                            <button
-                                                type="button"
-
-                                                className="boton-rechazar"
-
-                                                onClick={() =>
-                                                    cambiarEstadoSolicitud(
-                                                        solicitud.id_solicitud,
-                                                        "Rechazada"
-                                                    )
-                                                }
-                                            >
-                                                Rechazar
-                                            </button>
-
-                                        </div>
-
-                                    )}
-
-
-                                    {solicitud.estado ===
-                                        "Aprobada" && (
-
-                                        <div className="solicitud-visita-acciones">
-
-                                            <button
-                                                type="button"
-
-                                                className="boton-rechazar"
-
-                                                onClick={() =>
-                                                    cambiarEstadoSolicitud(
-                                                        solicitud.id_solicitud,
-                                                        "Cancelada"
-                                                    )
-                                                }
-                                            >
-                                                Cancelar participación
-                                            </button>
-
-                                        </div>
-
-                                    )}
-
-                                </article>
-
-                            )
+                                        {
+                                            solicitud.estado ===
+                                            "Aprobada" &&
+                                            !vencida && (
+                                                <div className="solicitud-visita-acciones">
+                                                    <button
+                                                        type="button"
+                                                        className="boton-rechazar"
+                                                        onClick={() =>
+                                                            cambiarEstadoSolicitud(
+                                                                solicitud.id_solicitud,
+                                                                "Cancelada"
+                                                            )
+                                                        }
+                                                    >
+                                                        Cancelar participación
+                                                    </button>
+                                                </div>
+                                            )
+                                        }
+                                    </article>
+                                );
+                            }
                         )}
-
                     </div>
-
                 )}
-
             </section>
-
         </div>
     );
 }
-
 
 export default VoluntariadoPanel;

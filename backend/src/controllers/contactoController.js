@@ -2,18 +2,51 @@ const {
     enviarCorreo
 } = require("../services/emailService");
 
+const {
+    normalizarTexto,
+    tieneLongitudValida,
+    correoValido,
+    telefonoValido,
+    contieneCaracteresControl
+} = require("../utils/validation");
+
+
+function contieneSaltosLinea(texto) {
+    return (
+        typeof texto === "string" &&
+        /[\r\n]/.test(texto)
+    );
+}
+
 
 async function enviarMensajeContacto(req, res) {
 
     try {
 
-        const {
-            nombre,
-            correo,
-            telefono,
-            asunto,
-            mensaje
-        } = req.body;
+        const nombre =
+            normalizarTexto(
+                req.body.nombre
+            );
+
+        const correo =
+            normalizarTexto(
+                req.body.correo
+            ).toLowerCase();
+
+        const telefono =
+            normalizarTexto(
+                req.body.telefono
+            );
+
+        const asunto =
+            normalizarTexto(
+                req.body.asunto
+            );
+
+        const mensaje =
+            normalizarTexto(
+                req.body.mensaje
+            );
 
 
         if (
@@ -31,12 +64,79 @@ async function enviarMensajeContacto(req, res) {
         }
 
 
-        const correoValido =
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (
+            contieneCaracteresControl(
+                nombre
+            ) ||
+            contieneCaracteresControl(
+                correo
+            ) ||
+            contieneCaracteresControl(
+                asunto
+            ) ||
+            contieneCaracteresControl(
+                mensaje
+            ) ||
+            (
+                telefono &&
+                contieneCaracteresControl(
+                    telefono
+                )
+            )
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "Uno o más campos contienen caracteres no permitidos."
+            });
+
+        }
 
 
         if (
-            !correoValido.test(
+            contieneSaltosLinea(
+                nombre
+            ) ||
+            contieneSaltosLinea(
+                correo
+            ) ||
+            contieneSaltosLinea(
+                asunto
+            ) ||
+            (
+                telefono &&
+                contieneSaltosLinea(
+                    telefono
+                )
+            )
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "Nombre, correo, teléfono y asunto deben escribirse en una sola línea."
+            });
+
+        }
+
+
+        if (
+            !tieneLongitudValida(
+                nombre,
+                2,
+                100
+            )
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "El nombre debe contener entre 2 y 100 caracteres."
+            });
+
+        }
+
+
+        if (
+            !correoValido(
                 correo
             )
         ) {
@@ -50,12 +150,63 @@ async function enviarMensajeContacto(req, res) {
 
 
         if (
-            mensaje.trim().length < 10
+            telefono &&
+            !telefonoValido(
+                telefono
+            )
         ) {
 
             return res.status(400).json({
                 mensaje:
-                    "El mensaje debe contener al menos 10 caracteres."
+                    "El teléfono debe contener entre 8 y 30 caracteres y solo puede incluir números, espacios, +, -, paréntesis."
+            });
+
+        }
+
+
+        if (
+            !tieneLongitudValida(
+                asunto,
+                3,
+                150
+            )
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "El asunto debe contener entre 3 y 150 caracteres."
+            });
+
+        }
+
+
+        if (
+            !tieneLongitudValida(
+                mensaje,
+                10,
+                3000
+            )
+        ) {
+
+            return res.status(400).json({
+                mensaje:
+                    "El mensaje debe contener entre 10 y 3000 caracteres."
+            });
+
+        }
+
+
+        if (
+            !process.env.SMTP_USER
+        ) {
+
+            console.error(
+                "SMTP_USER no está configurado."
+            );
+
+            return res.status(500).json({
+                mensaje:
+                    "No fue posible enviar el mensaje. Intenta nuevamente."
             });
 
         }

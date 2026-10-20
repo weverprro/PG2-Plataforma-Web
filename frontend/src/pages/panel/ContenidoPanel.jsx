@@ -76,13 +76,12 @@ function ContenidoPanel() {
         "QuienesSomos"
     );
 
-    const [
-        formulario,
-        setFormulario
-    ] = useState({
+    const [formulario, setFormulario] = useState({
         titulo: "",
         contenido: "",
         imagenUrl: "",
+        imagenPublicId: "",
+        orden: 1
     });
 
     const [
@@ -156,22 +155,19 @@ function ContenidoPanel() {
 
         if (encontrado) {
             setFormulario({
-                titulo:
-                    encontrado.titulo ||
-                    "",
-                contenido:
-                    encontrado.contenido ||
-                    "",
-                imagenUrl:
-                    encontrado.imagen_url ||
-                    "",
+                titulo:encontrado.titulo || "",
+                contenido:encontrado.contenido || "",
+                imagenUrl:encontrado.imagen_url || "",
+                imagenPublicId: encontrado.imagen_public_id || "",
+                orden: encontrado.orden || 1
             });
-
         } else {
             setFormulario({
                 titulo: "",
                 contenido: "",
                 imagenUrl: "",
+                imagenPublicId: "",
+                orden: 1
             });
         }
 
@@ -215,31 +211,27 @@ function ContenidoPanel() {
 
     async function subirImagen() {
         if (!archivo) {
-            return formulario.imagenUrl;
+            return {
+                url: formulario.imagenUrl || null,
+                publicId: formulario.imagenPublicId || null
+            };
         }
 
-        const datos =
-            new FormData();
+        const datos = new FormData();
+        datos.append("imagen", archivo);
 
-        datos.append(
-            "imagen",
-            archivo
+        const respuesta = await apiFetch(
+            "/contenidos/subir-imagen",
+            {
+                method: "POST",
+                body: datos
+            }
         );
 
-        const respuesta =
-            await apiFetch(
-                "/contenidos/subir-imagen",
-                {
-                    method: "POST",
-                    body: datos
-                }
-
-            );
-
-        return (
-            respuesta.imagen?.url ||
-            null
-        );
+        return {
+            url: respuesta.imagen?.url || null,
+            publicId: respuesta.imagen?.publicId || null
+        };
     }
 
     async function guardar(
@@ -252,23 +244,20 @@ function ContenidoPanel() {
             setMensaje("");
             setError("");
 
-            const imagenUrl =
-                permiteImagen
-                    ? await subirImagen()
-                    : null;
+            const imagen = permiteImagen
+                ? await subirImagen()
+                : {
+                    url: null,
+                    publicId: null
+                };
 
             const datos = {
-
-                titulo:
-                    formulario.titulo,
-                contenido:
-                    formulario.contenido,
-                tipoContenido:
-                    tipoSeleccionado,
-                imagenUrl:
-                    imagenUrl || null,
-                orden:
-                    1
+                titulo: formulario.titulo,
+                contenido: formulario.contenido,
+                tipoContenido: tipoSeleccionado,
+                imagenUrl: imagen.url,
+                imagenPublicId: imagen.publicId,
+                orden: 1
             };
 
             const existente =
@@ -318,12 +307,11 @@ function ContenidoPanel() {
     }
 
     function quitarImagen() {
-        setFormulario(
-            anterior => ({
-                ...anterior,
-                imagenUrl: ""
-            })
-        );
+        setFormulario(anterior => ({
+            ...anterior,
+            imagenUrl: "",
+            imagenPublicId: ""
+        }));
 
         setArchivo(null);
     }
@@ -335,11 +323,14 @@ function ContenidoPanel() {
                 tipoSeleccionado
         )?.nombre;
 
-    const permiteImagen =
-        ![
+    const permiteImagen = ![
             "Mision",
             "Vision",
-            "Valores"
+            "Valores",
+            "Visitas",
+            "Voluntariado",
+            "Donaciones"
+
         ].includes(
             tipoSeleccionado
         );

@@ -31,7 +31,7 @@ const formularioInicial = {
     modoVideo: "Integrado",
     formatoVideo: "Horizontal",
     destacada: false,
-    permanente: true,
+    tipoVigencia: "Permanente",
     fechaExpiracion: "",
     idNecesidad: ""
 };
@@ -431,12 +431,12 @@ function PublicacionesPanel() {
 
 
         if (
-            !formulario.permanente &&
+            formulario.tipoVigencia === "Programada" &&
             !formulario.fechaExpiracion
         ) {
 
             setError(
-                "Debes indicar cuándo expirará la publicación."
+                "Debes indicar cuándo expirará la publicación programada."
             );
 
             return;
@@ -476,17 +476,11 @@ function PublicacionesPanel() {
              * existentes al formato que
              * espera el backend.
              */
-            const imagenesAnteriores =
-                imagenesExistentes.map(
-                    imagen => ({
-                        url:
-                            imagen.imagen_url,
-
-                        textoAlternativo:
-                            imagen.texto_alternativo ||
-                            null
-                    })
-                );
+            const imagenesAnteriores = imagenesExistentes.map(imagen => ({
+                url: imagen.imagen_url,
+                publicId: imagen.imagen_public_id || null,
+                textoAlternativo: imagen.texto_alternativo || null
+            }));
 
 
             const imagenesFinales = [
@@ -519,12 +513,12 @@ function PublicacionesPanel() {
                 destacada:
                     formulario.destacada,
 
+                tipoVigencia: formulario.tipoVigencia,
+
                 fechaExpiracion:
-                    formulario.permanente
-                        ? null
-                        : prepararFecha(
-                            formulario.fechaExpiracion
-                        ),
+                    formulario.tipoVigencia === "Programada"
+                        ? prepararFecha(formulario.fechaExpiracion)
+                        : null,
 
                 idNecesidad:
                     formulario.idNecesidad
@@ -609,10 +603,6 @@ function PublicacionesPanel() {
         );
 
 
-        const permanente =
-            !publicacion.fecha_expiracion;
-
-
         setFormulario({
 
             titulo:
@@ -641,14 +631,26 @@ function PublicacionesPanel() {
                     publicacion.destacada
                 ),
 
-            permanente,
+            tipoVigencia:
+                publicacion.tipo_vigencia ||
+                (
+                    publicacion.fecha_expiracion
+                        ? "Programada"
+                        : "Permanente"
+                ),
 
             fechaExpiracion:
-                permanente
-                    ? ""
-                    : fechaParaInput(
+                (
+                    publicacion.tipo_vigencia === "Programada" ||
+                    (
+                        !publicacion.tipo_vigencia &&
                         publicacion.fecha_expiracion
-                    ),
+                    )
+                )
+                    ? fechaParaInput(
+                        publicacion.fecha_expiracion
+                    )
+                    : "",
 
             idNecesidad:
                 publicacion.id_necesidad
@@ -1279,31 +1281,67 @@ function PublicacionesPanel() {
 
                         </label>
 
+                    </div>
 
-                        <label className="opcion-check">
 
-                            <input
-                                type="checkbox"
+                    <div className="campo-formulario">
 
-                                name="permanente"
-
-                                checked={
-                                    formulario.permanente
-                                }
-
-                                onChange={
-                                    manejarCambio
-                                }
-                            />
-
-                            Publicación permanente
-
+                        <label>
+                            Vigencia de la publicación
                         </label>
+
+                        <select
+                            name="tipoVigencia"
+
+                            value={
+                                formulario.tipoVigencia
+                            }
+
+                            onChange={
+                                manejarCambio
+                            }
+                        >
+                            <option value="Permanente">
+                                Permanente
+                            </option>
+
+                            <option value="Temporal">
+                                Temporal - expira en 1 mes
+                            </option>
+
+                            <option value="Programada">
+                                Programada - elegir fecha
+                            </option>
+                        </select>
+
+                        {formulario.tipoVigencia === "Permanente" && (
+
+                            <small>
+                                Esta publicación no tendrá fecha de expiración.
+                            </small>
+
+                        )}
+
+                        {formulario.tipoVigencia === "Temporal" && (
+
+                            <small>
+                                Esta publicación expirará automáticamente un mes después de publicarse.
+                            </small>
+
+                        )}
+
+                        {formulario.tipoVigencia === "Programada" && (
+
+                            <small>
+                                Selecciona manualmente la fecha y hora de expiración.
+                            </small>
+
+                        )}
 
                     </div>
 
 
-                    {!formulario.permanente && (
+                    {formulario.tipoVigencia === "Programada" && (
 
                         <div className="campo-formulario">
 
@@ -1421,6 +1459,17 @@ function PublicacionesPanel() {
                                                 {
                                                     obtenerEstado(
                                                         publicacion
+                                                    )
+                                                }
+                                            </span>
+
+                                            <span>
+                                                {
+                                                    publicacion.tipo_vigencia ||
+                                                    (
+                                                        publicacion.fecha_expiracion
+                                                            ? "Programada"
+                                                            : "Permanente"
                                                     )
                                                 }
                                             </span>
