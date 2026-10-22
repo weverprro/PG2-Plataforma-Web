@@ -37,8 +37,10 @@ async function crearDonacion(req, res) {
         const telefonoDonante = normalizarTexto(req.body.telefonoDonante);
         const tipoDonacion = normalizarTexto(req.body.tipoDonacion);
         const descripcion = normalizarTexto(req.body.descripcion);
+        const moneda = normalizarTexto(req.body.moneda).toUpperCase();
         const { monto } = req.body;
-        const tiposPermitidos = [ "Monetaria", "Especie"];
+        const tiposPermitidos = ["Monetaria", "Especie"];
+        const monedasPermitidas = ["USD", "GTQ"];
 
         if (!tipoDonacion) {
             return res.status(400).json({
@@ -119,6 +121,21 @@ async function crearDonacion(req, res) {
                     mensaje: "El monto supera el límite permitido para una donación en línea."
                 });
             }
+
+            if (!monedasPermitidas.includes(moneda)) {
+                return res.status(400).json({
+                    mensaje: "La moneda de la donación monetaria no es válida."
+                });
+            }
+
+            if (
+                moneda === "GTQ" &&
+                Number(monto) < 5
+            ) {
+                return res.status(400).json({
+                    mensaje: "El monto mínimo para una donación con Recurrente es Q5.00."
+                });
+            }
         }
 
         if (tipoDonacion === "Especie") {
@@ -161,10 +178,11 @@ async function crearDonacion(req, res) {
                 telefono_donante,
                 tipo_donacion,
                 monto,
+                moneda,
                 descripcion,
                 estado
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 nombreDonante || null,
                 correoDonante || null,
@@ -174,6 +192,9 @@ async function crearDonacion(req, res) {
                 tipoDonacion,
                 tipoDonacion === "Monetaria"
                     ? Number(monto)
+                    : null,
+                tipoDonacion === "Monetaria"
+                    ? moneda
                     : null,
                 tipoDonacion === "Especie"
                     ? descripcion
@@ -234,7 +255,8 @@ Mesón Buen Samaritano`
         return res.status(201).json({
             mensaje: "Donación registrada correctamente.",
             idDonacion: resultado.insertId,
-            requierePago: true
+            requierePago: true,
+            moneda
         });
     } catch (error) {
         console.error(
@@ -252,28 +274,41 @@ async function listarDonaciones(req, res) {
     try {
         const [donaciones] = await pool.execute(
             `SELECT
-                id_donacion,
-                nombre_donante,
-                correo_donante,
-                telefono_donante,
-                tipo_donacion,
-                monto,
-                descripcion,
-                fecha,
-                estado
-             FROM donacion
-             ORDER BY fecha DESC`
+                d.id_donacion,
+                d.nombre_donante,
+                d.correo_donante,
+                d.telefono_donante,
+                d.tipo_donacion,
+                d.monto,
+                d.moneda,
+                d.descripcion,
+                d.fecha,
+                d.estado,
+                tp.proveedor,
+                tp.estado AS estado_transaccion,
+                tp.orden_externa,
+                tp.referencia_externa
+             FROM donacion d
+             LEFT JOIN transaccion_pago tp ON tp.id_transaccion = (
+                 SELECT t2.id_transaccion
+                 FROM transaccion_pago t2
+                 WHERE t2.id_donacion = d.id_donacion
+                 ORDER BY
+                     CASE
+                         WHEN (t2.proveedor = 'PayPal' AND UPPER(t2.estado) = 'COMPLETED')
+                           OR (t2.proveedor = 'Recurrente' AND LOWER(t2.estado) = 'succeeded')
+                         THEN 0 ELSE 1
+                     END,
+                     t2.id_transaccion DESC
+                 LIMIT 1
+             )
+             ORDER BY d.fecha DESC, d.id_donacion DESC`
         );
 
-        res.json(donaciones);
-
+        return res.json(donaciones);
     } catch (error) {
-        console.error(
-            "Error al listar donaciones:",
-            error.message
-        );
-
-        res.status(500).json({
+        console.error("Error al listar donaciones:", error.message);
+        return res.status(500).json({
             mensaje: "Ocurrió un error al obtener las donaciones."
         });
     }
@@ -297,6 +332,7 @@ async function obtenerDonacion(req, res) {
                 d.telefono_donante,
                 d.tipo_donacion,
                 d.monto,
+                d.moneda,
                 d.descripcion,
                 d.fecha,
                 d.estado,
@@ -308,7 +344,9 @@ async function obtenerDonacion(req, res) {
              FROM donacion d
              LEFT JOIN transaccion_pago tp
                 ON d.id_donacion = tp.id_donacion
+               AND tp.proveedor = 'PayPal'
              WHERE d.id_donacion = ?
+             ORDER BY tp.id_transaccion DESC
              LIMIT 1`,
             [id]
         );
@@ -358,6 +396,7 @@ async function actualizarEstadoDonacion(req, res) {
                 telefono_donante,
                 tipo_donacion,
                 monto,
+                moneda,
                 descripcion,
                 estado
              FROM donacion
@@ -516,6 +555,7 @@ async function crearOrdenPago(req, res) {
                 id_donacion,
                 tipo_donacion,
                 monto,
+                moneda,
                 estado
              FROM donacion
              WHERE id_donacion = ?
@@ -534,6 +574,12 @@ async function crearOrdenPago(req, res) {
         if (donacion.tipo_donacion !== "Monetaria") {
             return res.status(400).json({
                 mensaje: "Esta donación no requiere pago electrónico."
+            });
+        }
+
+        if (donacion.moneda !== "USD") {
+            return res.status(400).json({
+                mensaje: "Esta donación no corresponde a un pago con PayPal."
             });
         }
 
@@ -645,6 +691,7 @@ async function capturarOrdenPago(req, res) { const conexion = await pool.getConn
                 d.id_donacion,
                 d.tipo_donacion,
                 d.monto,
+                d.moneda,
                 d.estado,
                 tp.id_transaccion,
                 tp.orden_externa,
@@ -668,6 +715,13 @@ async function capturarOrdenPago(req, res) { const conexion = await pool.getConn
             return res.status(400).json({
                 mensaje:
                     "Esta donación no corresponde a un pago electrónico."
+            });
+        }
+
+        if (donacion.moneda !== "USD") {
+            return res.status(400).json({
+                mensaje:
+                    "Esta donación no corresponde a un pago con PayPal."
             });
         }
 

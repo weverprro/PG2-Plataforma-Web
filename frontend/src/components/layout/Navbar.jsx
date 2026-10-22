@@ -1,53 +1,159 @@
-import { NavLink, Link } from "react-router";
+import {
+    useEffect,
+    useState
+} from "react";
+
+import {
+    NavLink,
+    Link,
+    useLocation
+} from "react-router";
+
 
 function Navbar() {
 
+    const [
+        menuAbierto,
+        setMenuAbierto
+    ] = useState(false);
+
+    const ubicacion = useLocation();
+
+
+    useEffect(() => {
+        setMenuAbierto(false);
+    }, [ubicacion.pathname]);
+
+
+    useEffect(() => {
+        document.body.style.overflow =
+            menuAbierto
+                ? "hidden"
+                : "";
+
+        return () => {
+            document.body.style.overflow = "";
+        };
+    }, [menuAbierto]);
+
+
+    function cerrarMenu() {
+        setMenuAbierto(false);
+    }
+
+
     return (
-        <header className="navbar">
+        <>
+            <header className="navbar">
 
-            <Link
-                to="/"
-                className="navbar-logo"
-            >
-                Mesón Buen Samaritano
-            </Link>
+                <Link
+                    to="/"
+                    className="navbar-logo"
+                    onClick={cerrarMenu}
+                >
+                    Mesón Buen Samaritano
+                </Link>
 
-            <nav className="navbar-links">
 
-                <NavLink to="/">
-                    Inicio
-                </NavLink>
+                <button
+                    type="button"
+                    className="navbar-menu-toggle"
+                    aria-label={
+                        menuAbierto
+                            ? "Cerrar menú"
+                            : "Abrir menú"
+                    }
+                    aria-expanded={menuAbierto}
+                    onClick={() =>
+                        setMenuAbierto(
+                            anterior => !anterior
+                        )
+                    }
+                >
+                    <span />
+                    <span />
+                    <span />
+                </button>
 
-                <NavLink to="/nosotros">
-                    Nosotros
-                </NavLink>
 
-                <NavLink to="/publicaciones">
-                    Publicaciones
-                </NavLink>
+                <nav
+                    className={`navbar-links ${
+                        menuAbierto
+                            ? "navbar-links-abierto"
+                            : ""
+                    }`}
+                >
 
-                <NavLink to="/visitas">
-                    Visitas
-                </NavLink>
+                    <div className="navbar-menu-cabecera">
+                        <strong>
+                            Menú
+                        </strong>
 
-                <NavLink to="/voluntariado">
-                    Voluntariado
-                </NavLink>
+                        <button
+                            type="button"
+                            className="navbar-menu-cerrar"
+                            aria-label="Cerrar menú"
+                            onClick={cerrarMenu}
+                        >
+                            ×
+                        </button>
+                    </div>
 
-                <NavLink to="/contacto">
-                    Contacto
-                </NavLink>
 
-            </nav>
+                    <NavLink to="/">
+                        Inicio
+                    </NavLink>
 
-            <Link
-                to="/donaciones"
-                className="boton-donar"
-            >
-                Donar
-            </Link>
+                    <NavLink to="/nosotros">
+                        Nosotros
+                    </NavLink>
 
-        </header>
+                    <NavLink to="/publicaciones">
+                        Publicaciones
+                    </NavLink>
+
+                    <NavLink to="/visitas">
+                        Visitas
+                    </NavLink>
+
+                    <NavLink to="/voluntariado">
+                        Voluntariado
+                    </NavLink>
+
+                    <NavLink to="/contacto">
+                        Contacto
+                    </NavLink>
+
+                    <Link
+                        to="/donaciones"
+                        className="navbar-donar-movil"
+                    >
+                        Donar
+                    </Link>
+
+                </nav>
+
+
+                <Link
+                    to="/donaciones"
+                    className="boton-donar"
+                    onClick={cerrarMenu}
+                >
+                    Donar
+                </Link>
+
+            </header>
+
+
+            {menuAbierto && (
+                <button
+                    type="button"
+                    className="navbar-menu-capa"
+                    aria-label="Cerrar menú"
+                    onClick={cerrarMenu}
+                />
+            )}
+        </>
     );
 }
 

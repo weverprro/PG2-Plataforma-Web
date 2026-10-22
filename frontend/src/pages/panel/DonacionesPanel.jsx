@@ -135,29 +135,20 @@ function DonacionesPanel() {
     }
 
 
-    const donacionesFiltradas =
-        useMemo(() => {
-
-            if (
-                filtro === "Todas"
-            ) {
-
-                return donaciones;
-
-            }
-
-
-            return donaciones.filter(
-                (donacion) =>
-                    donacion.tipo_donacion ===
-                    filtro
+    const donacionesFiltradas = useMemo(() => {
+        if (filtro === "Todas") return donaciones;
+        if (filtro === "PayPal" || filtro === "Recurrente") {
+            return donaciones.filter(d =>
+                d.tipo_donacion === "Monetaria" && d.proveedor === filtro
             );
-
-        }, [
-            donaciones,
-            filtro
-        ]);
-
+        }
+        if (filtro === "Sin transacción") {
+            return donaciones.filter(d =>
+                d.tipo_donacion === "Monetaria" && !d.proveedor
+            );
+        }
+        return donaciones.filter(d => d.tipo_donacion === filtro);
+    }, [donaciones, filtro]);
 
     function formatearFecha(
         fecha
@@ -432,6 +423,27 @@ function DonacionesPanel() {
 
 
                 <button
+                    className={filtro === "PayPal" ? "activo" : ""}
+                    onClick={() => setFiltro("PayPal")}
+                >
+                    PayPal · USD
+                </button>
+
+                <button
+                    className={filtro === "Recurrente" ? "activo" : ""}
+                    onClick={() => setFiltro("Recurrente")}
+                >
+                    Recurrente · GTQ
+                </button>
+
+                <button
+                    className={filtro === "Sin transacción" ? "activo" : ""}
+                    onClick={() => setFiltro("Sin transacción")}
+                >
+                    Sin transacción
+                </button>
+
+                <button
                     className={
                         filtro === "Especie"
                             ? "activo"
@@ -601,7 +613,7 @@ function DonacionesPanel() {
                                             </strong>
 
                                             <span>
-                                                USD{" "}
+                                                {donacion.moneda || "Sin moneda"}{" "}
                                                 {
                                                     Number(
                                                         donacion.monto ||
@@ -672,9 +684,17 @@ function DonacionesPanel() {
 
                                     <div className="donacion-paypal-info">
 
-                                        El estado de esta
-                                        donación monetaria se
-                                        gestiona mediante PayPal.
+                                        <strong>
+                                            Proveedor: {donacion.proveedor || "Sin transacción registrada"}
+                                        </strong>
+                                        <p>
+                                            {donacion.proveedor
+                                                ? `Estado del pago: ${donacion.estado_transaccion || "No disponible"}.`
+                                                : "Todavía no se ha registrado una transacción para esta donación."}
+                                        </p>
+                                        <p>
+                                            Moneda: {donacion.moneda || "No especificada"}
+                                        </p>
 
                                     </div>
 

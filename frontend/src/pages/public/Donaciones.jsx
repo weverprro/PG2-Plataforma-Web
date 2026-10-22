@@ -12,6 +12,7 @@ const formularioInicial = {
 
 function Donaciones() {
     const [tipo, setTipo] = useState("Monetaria");
+    const [metodoPago, setMetodoPago] = useState("PayPal");
     const [formulario, setFormulario] = useState(formularioInicial);
     const [contenido, setContenido] = useState(null);
     const [turnstileToken, setTurnstileToken] = useState("");
@@ -142,7 +143,23 @@ function Donaciones() {
 
     function cambiarTipo(nuevoTipo) {
         setTipo(nuevoTipo);
+        setMetodoPago("PayPal");
         setFormulario(formularioInicial);
+        setMensaje("");
+        setError("");
+        setTurnstileToken("");
+
+        turnstileRef.current?.reset();
+    }
+
+    function cambiarMetodoPago(nuevoMetodo) {
+        setMetodoPago(nuevoMetodo);
+
+        setFormulario(anterior => ({
+            ...anterior,
+            monto: ""
+        }));
+
         setMensaje("");
         setError("");
         setTurnstileToken("");
@@ -183,6 +200,13 @@ function Donaciones() {
                 monto:
                     tipo === "Monetaria"
                         ? Number(formulario.monto)
+                        : null,
+
+                moneda:
+                    tipo === "Monetaria"
+                        ? metodoPago === "Recurrente"
+                            ? "GTQ"
+                            : "USD"
                         : null,
 
                 descripcion:
@@ -233,34 +257,62 @@ function Donaciones() {
                 );
             }
 
-            const orden = await apiFetch(
-                `/donaciones/${idDonacion}/paypal/crear-orden`,
+            if (metodoPago === "PayPal") {
+                const orden = await apiFetch(
+                    `/donaciones/${idDonacion}/paypal/crear-orden`,
+                    {
+                        method: "POST"
+                    }
+                );
+
+                if (!orden.enlaceAprobacion) {
+                    throw new Error(
+                        "PayPal no devolvió un enlace de aprobación."
+                    );
+                }
+
+                localStorage.setItem(
+                    "donacionPaypalPendiente",
+                    String(idDonacion)
+                );
+
+                window.location.href =
+                    orden.enlaceAprobacion;
+
+                return;
+            }
+
+            const checkout = await apiFetch(
+                "/recurrente/crear-checkout",
                 {
-                    method: "POST"
+                    method: "POST",
+                    body: JSON.stringify({
+                        idDonacion
+                    })
                 }
             );
 
-            if (!orden.enlaceAprobacion) {
+            if (
+                !checkout.idCheckout ||
+                !checkout.checkoutUrl
+            ) {
                 throw new Error(
-                    "PayPal no devolvió un enlace de aprobación."
+                    "Recurrente no devolvió la información necesaria para continuar."
                 );
             }
 
-            /*
-             * Guardamos el ID antes de
-             * salir hacia PayPal.
-             */
-            localStorage.setItem(
-                "donacionPaypalPendiente",
+            sessionStorage.setItem(
+                "recurrenteCheckoutPendiente",
+                checkout.idCheckout
+            );
+
+            sessionStorage.setItem(
+                "recurrenteDonacionPendiente",
                 String(idDonacion)
             );
 
-            /*
-             * Redirigimos al Sandbox
-             * de PayPal.
-             */
             window.location.href =
-                orden.enlaceAprobacion;
+                checkout.checkoutUrl;
         } catch (error) {
             console.error(error);
 
@@ -276,11 +328,16 @@ function Donaciones() {
         }
     }
 
+    const montoMinimo =
+        metodoPago === "Recurrente"
+            ? 5
+            : 1;
+
     const montoValido =
         tipo !== "Monetaria" ||
         (
             formulario.monto !== "" &&
-            Number(formulario.monto) > 0
+            Number(formulario.monto) >= montoMinimo
         );
 
     const especieValida =
@@ -338,7 +395,7 @@ function Donaciones() {
                             </strong>
 
                             <span>
-                                Realiza un aporte mediante PayPal.
+                                Realiza un aporte mediante PayPal o tarjeta con Recurrente.
                             </span>
                         </button>
 
@@ -367,11 +424,11 @@ function Donaciones() {
                         {tipo === "Monetaria" ? (
                             <>
                                 <strong>
-                                    Pago seguro con PayPal
+                                    Pago electrónico seguro
                                 </strong>
 
                                 <p>
-                                    Serás redirigido a PayPal para autorizar la transacción.
+                                    Puedes donar con PayPal en USD o mediante Recurrente en GTQ.
                                 </p>
                             </>
                         ) : (
@@ -477,22 +534,82 @@ function Donaciones() {
                             </div>
                         )}
 
+                        {tipo === "Monetaria" && (
+                            <div className="campo-formulario">
+                                <label>
+                                    Método de pago
+                                </label>
+
+                                <div className="donaciones-tipos">
+                                    <button
+                                        type="button"
+                                        className={
+                                            metodoPago === "PayPal"
+                                                ? "donacion-tipo activa"
+                                                : "donacion-tipo"
+                                        }
+                                        onClick={() =>
+                                            cambiarMetodoPago("PayPal")
+                                        }
+                                    >
+                                        <strong>
+                                            PayPal
+                                        </strong>
+
+                                        <span>
+                                            Pago único en dólares estadounidenses.
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className={
+                                            metodoPago === "Recurrente"
+                                                ? "donacion-tipo activa"
+                                                : "donacion-tipo"
+                                        }
+                                        onClick={() =>
+                                            cambiarMetodoPago("Recurrente")
+                                        }
+                                    >
+                                        <strong>
+                                            Recurrente
+                                        </strong>
+
+                                        <span>
+                                            Pago con tarjeta en quetzales.
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {tipo === "Monetaria" ? (
                             <div className="campo-formulario">
                                 <label>
-                                    Monto (USD)
+                                    {
+                                        metodoPago === "Recurrente"
+                                            ? "Monto (GTQ)"
+                                            : "Monto (USD)"
+                                    }
                                 </label>
 
                                 <input
                                     type="number"
                                     name="monto"
-                                    min="1"
+                                    min={montoMinimo}
                                     step="0.01"
                                     value={formulario.monto}
                                     onChange={manejarCambio}
                                     placeholder="10.00"
                                     required
                                 />
+
+                                {metodoPago === "Recurrente" && (
+                                    <small>
+                                        El monto mínimo para Recurrente es Q5.00.
+                                    </small>
+                                )}
                             </div>
                         ) : (
                             <div className="campo-formulario">
@@ -548,7 +665,9 @@ function Donaciones() {
                                 enviando
                                     ? "Procesando..."
                                     : tipo === "Monetaria"
-                                        ? "Continuar con PayPal"
+                                        ? metodoPago === "Recurrente"
+                                            ? "Continuar con Recurrente"
+                                            : "Continuar con PayPal"
                                         : "Registrar donación"
                             }
                         </button>

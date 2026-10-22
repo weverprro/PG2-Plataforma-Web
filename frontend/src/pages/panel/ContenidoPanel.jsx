@@ -11,6 +11,11 @@ import {
 const tiposContenido = [
 
     {
+        valor: "HeroInicio",
+        nombre: "Imagen principal de inicio"
+    },
+
+    {
         valor: "QuienesSomos",
         nombre: "Quiénes somos"
     },
@@ -73,7 +78,7 @@ function ContenidoPanel() {
         tipoSeleccionado,
         setTipoSeleccionado
     ] = useState(
-        "QuienesSomos"
+        "HeroInicio"
     );
 
     const [formulario, setFormulario] = useState({
@@ -251,9 +256,16 @@ function ContenidoPanel() {
                     publicId: null
                 };
 
+            const esHeroInicio =
+                tipoSeleccionado === "HeroInicio";
+
             const datos = {
-                titulo: formulario.titulo,
-                contenido: formulario.contenido,
+                titulo: esHeroInicio
+                    ? "Imagen principal de inicio"
+                    : formulario.titulo,
+                contenido: esHeroInicio
+                    ? "Imagen utilizada como fondo del encabezado principal de la página de inicio."
+                    : formulario.contenido,
                 tipoContenido: tipoSeleccionado,
                 imagenUrl: imagen.url,
                 imagenPublicId: imagen.publicId,
@@ -322,6 +334,10 @@ function ContenidoPanel() {
                 item.valor ===
                 tipoSeleccionado
         )?.nombre;
+
+    const esHeroInicio =
+        tipoSeleccionado ===
+        "HeroInicio";
 
     const permiteImagen = ![
             "Mision",
@@ -424,49 +440,74 @@ function ContenidoPanel() {
                         onSubmit={
                             guardar
                         }
+                        className={
+                            esHeroInicio
+                                ? "contenido-hero-editor"
+                                : ""
+                        }
                     >
-                        <div className="campo-formulario">
-                            <label>
-                                Título
-                            </label>
-                            <input
-                                type="text"
-                                name="titulo"
-                                value={
-                                    formulario.titulo
-                                }
-                                onChange={
-                                    manejarCambio
-                                }
-                                required
-                            />
-                        </div>
+                        {esHeroInicio ? (
+                            <div className="contenido-hero-ayuda">
+                                <strong>
+                                    Imagen del encabezado principal
+                                </strong>
+                                <p>
+                                    Esta imagen se mostrará como fondo
+                                    del encabezado de la página de inicio.
+                                    Se recomienda utilizar una fotografía
+                                    horizontal de buena calidad.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="campo-formulario">
+                                    <label>
+                                        Título
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="titulo"
+                                        value={
+                                            formulario.titulo
+                                        }
+                                        onChange={
+                                            manejarCambio
+                                        }
+                                        required
+                                    />
+                                </div>
 
-                        <div className="campo-formulario">
-                            <label>
-                                Contenido
-                            </label>
+                                <div className="campo-formulario">
+                                    <label>
+                                        Contenido
+                                    </label>
 
-                            <textarea
-                                name="contenido"
-                                value={
-                                    formulario.contenido
-                                }
+                                    <textarea
+                                        name="contenido"
+                                        value={
+                                            formulario.contenido
+                                        }
 
-                                onChange={
-                                    manejarCambio
-                                }
+                                        onChange={
+                                            manejarCambio
+                                        }
 
-                                rows="16"
+                                        rows="16"
 
-                                required
-                            />
-                        </div>
+                                        required
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         {permiteImagen && (
                         <div className="campo-formulario">
                             <label>
-                                Imagen
+                                {
+                                    esHeroInicio
+                                        ? "Imagen del hero"
+                                        : "Imagen"
+                                }
                             </label>
 
                             {formulario.imagenUrl && (

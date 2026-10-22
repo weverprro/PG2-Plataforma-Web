@@ -1659,7 +1659,7 @@ function PublicacionesPanel() {
 
                                             target="_blank"
 
-                                            className="boton-secundario"
+                                            className="boton-publicacion boton-ver"
                                         >
                                             Ver
                                         </Link>
@@ -1668,7 +1668,7 @@ function PublicacionesPanel() {
                                         <button
                                             type="button"
 
-                                            className="boton-secundario"
+                                            className="boton-publicacion boton-editar"
 
                                             onClick={() =>
                                                 iniciarEdicion(
@@ -1685,8 +1685,8 @@ function PublicacionesPanel() {
 
                                             className={
                                                 publicacion.estado
-                                                    ? "boton-secundario"
-                                                    : "boton-principal"
+                                                    ? "boton-publicacion boton-desactivar"
+                                                    : "boton-publicacion boton-activar"
                                             }
 
                                             onClick={() =>
@@ -1712,7 +1712,7 @@ function PublicacionesPanel() {
                                                 <button
                                                     type="button"
 
-                                                    className="boton-secundario"
+                                                    className="boton-publicacion boton-eliminar-definitivo"
 
                                                     onClick={() =>
                                                         eliminarDefinitivamente(

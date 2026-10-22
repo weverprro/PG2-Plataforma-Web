@@ -24,6 +24,8 @@ function NecesidadesPanel() {
         setNecesidades
     ] = useState([]);
 
+    const [filtro, setFiltro] = useState("Todas");
+
     const [
         formulario,
         setFormulario
@@ -74,7 +76,7 @@ function NecesidadesPanel() {
 
             const respuesta =
                 await apiFetch(
-                    "/necesidades"
+                    "/necesidades/admin/listado"
                 );
 
 
@@ -326,63 +328,36 @@ function NecesidadesPanel() {
     }
 
 
-    async function desactivarNecesidad(
-        idNecesidad
-    ) {
-
-        const confirmar =
-            window.confirm(
-                "¿Deseas desactivar esta necesidad?"
-            );
-
-
-        if (!confirmar) {
-
+    async function cambiarEstadoNecesidad(idNecesidad, nuevoEstado) {
+        if (nuevoEstado === "Inactiva" &&
+            !window.confirm("¿Deseas desactivar esta necesidad?")) {
             return;
-
         }
-
 
         try {
-
             setMensaje("");
             setError("");
-
-
-            const respuesta =
-                await apiFetch(
-                    `/necesidades/${idNecesidad}`,
-                    {
-                        method: "DELETE"
-                    }
-                );
-
-
+            const respuesta = await apiFetch(
+                `/necesidades/${idNecesidad}/estado`,
+                {
+                    method: "PUT",
+                    body: JSON.stringify({ estado: nuevoEstado })
+                }
+            );
             await cargarNecesidades();
-
-
-            setMensaje(
-                respuesta.mensaje ||
-                "Necesidad desactivada correctamente."
-            );
-
-
+            if (editandoId === idNecesidad) {
+                limpiarFormulario();
+            }
+            setMensaje(respuesta.mensaje || "Estado actualizado correctamente.");
         } catch (error) {
-
-            console.error(
-                error
-            );
-
-
-            setError(
-                error.message ||
-                "No fue posible desactivar la necesidad."
-            );
-
+            console.error(error);
+            setError(error.message || "No fue posible cambiar el estado.");
         }
-
     }
 
+    const necesidadesFiltradas = filtro === "Todas"
+        ? necesidades
+        : necesidades.filter(item => item.estado === filtro);
 
     function formatearFecha(fecha) {
 
@@ -680,6 +655,20 @@ function NecesidadesPanel() {
                     Necesidades registradas
                 </h2>
 
+                <div className="necesidades-filtros" aria-label="Filtrar necesidades">
+                    {["Todas", "Activa", "Atendida", "Inactiva"].map(estado => (
+                        <button
+                            key={estado}
+                            type="button"
+                            className={filtro === estado ? "activo" : ""}
+                            onClick={() => setFiltro(estado)}
+                        >
+                            {estado === "Todas" ? "Todas" :
+                                estado === "Activa" ? "Activas" :
+                                estado === "Atendida" ? "Atendidas" : "Inactivas"}
+                        </button>
+                    ))}
+                </div>
 
                 {cargando ? (
 
@@ -687,7 +676,7 @@ function NecesidadesPanel() {
                         Cargando necesidades...
                     </p>
 
-                ) : necesidades.length ===
+                ) : necesidadesFiltradas.length ===
                     0 ? (
 
                     <div className="panel-vacio">
@@ -701,7 +690,7 @@ function NecesidadesPanel() {
 
                     <div className="necesidades-listado">
 
-                        {necesidades.map(
+                        {necesidadesFiltradas.map(
                             (
                                 necesidad
                             ) => (
@@ -836,8 +825,9 @@ function NecesidadesPanel() {
                                                 className="btn-desactivar"
 
                                                 onClick={() =>
-                                                    desactivarNecesidad(
-                                                        necesidad.id_necesidad
+                                                    cambiarEstadoNecesidad(
+                                                        necesidad.id_necesidad,
+                                                        "Inactiva"
                                                     )
                                                 }
                                             >
@@ -846,6 +836,18 @@ function NecesidadesPanel() {
 
                                             </button>
 
+                                        )}
+
+                                        {necesidad.estado === "Inactiva" && (
+                                            <button
+                                                type="button"
+                                                className="btn-reactivar"
+                                                onClick={() => cambiarEstadoNecesidad(
+                                                    necesidad.id_necesidad, "Activa"
+                                                )}
+                                            >
+                                                Reactivar
+                                            </button>
                                         )}
 
                                     </div>

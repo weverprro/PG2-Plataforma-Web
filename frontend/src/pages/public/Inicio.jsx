@@ -16,6 +16,11 @@ import {
 function Inicio() {
 
     const [
+        contenidoHero,
+        setContenidoHero
+    ] = useState(null);
+
+    const [
         contenidoNosotros,
         setContenidoNosotros
     ] = useState(null);
@@ -47,9 +52,14 @@ function Inicio() {
         try {
 
             const [
+                respuestaHero,
                 respuestaNosotros,
                 respuestaPublicaciones
             ] = await Promise.all([
+
+                apiFetch(
+                    "/contenidos/tipo/HeroInicio"
+                ),
 
                 apiFetch(
                     "/contenidos/tipo/QuienesSomos"
@@ -60,6 +70,17 @@ function Inicio() {
                 )
 
             ]);
+
+
+            if (
+                Array.isArray(respuestaHero) &&
+                respuestaHero.length > 0
+            ) {
+
+                setContenidoHero(
+                    respuestaHero[0]
+                );
+            }
 
 
             if (
@@ -167,7 +188,18 @@ function Inicio() {
                 HERO
             ====================== */}
 
-            <section className="inicio-hero">
+            <section
+                className="inicio-hero"
+                style={
+                    contenidoHero?.imagen_url
+                        ? {
+                            backgroundImage: `url(${obtenerUrlArchivo(
+                                contenidoHero.imagen_url
+                            )})`
+                        }
+                        : undefined
+                }
+            >
 
                 <div className="inicio-hero-capa" />
 

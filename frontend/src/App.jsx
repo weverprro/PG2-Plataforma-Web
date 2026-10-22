@@ -3,7 +3,6 @@ import {
     Route
 } from "react-router";
 
-
 import PublicLayout
     from "./layouts/PublicLayout";
 
@@ -31,6 +30,12 @@ import DetallePublicacion
 import Donaciones
     from "./pages/public/Donaciones";
 
+import RecurrenteExito
+    from "./pages/public/RecurrenteExito";
+
+import RecurrenteCancelado
+    from "./pages/public/RecurrenteCancelado";
+
 import Visitas
     from "./pages/public/Visitas";
 
@@ -46,9 +51,6 @@ import Login
 import Dashboard
     from "./pages/panel/Dashboard";
 
-import ModuloPanel
-    from "./pages/panel/ModuloPanel";
-
 import ContenidoPanel
     from "./pages/panel/ContenidoPanel";
 
@@ -58,33 +60,26 @@ import VisitasPanel
 import VoluntariadoPanel
     from "./pages/panel/VoluntariadoPanel";
 
-import DonacionesPanel 
+import DonacionesPanel
     from "./pages/panel/DonacionesPanel";
-    
+
 import TransaccionesPanel
     from "./pages/panel/TransaccionesPanel";
 
 import NecesidadesPanel
     from "./pages/panel/NecesidadesPanel";
-    
+
 import UsuariosPanel
     from "./pages/panel/UsuariosPanel";
-    
-function App() {
 
+function App() {
     return (
         <Routes>
-
-            {/* ======================
-                PUBLICO
-            ====================== */}
-
             <Route
                 element={
                     <PublicLayout />
                 }
             >
-
                 <Route
                     path="/"
                     element={
@@ -121,6 +116,20 @@ function App() {
                 />
 
                 <Route
+                    path="/donaciones/recurrente/exito"
+                    element={
+                        <RecurrenteExito />
+                    }
+                />
+
+                <Route
+                    path="/donaciones/recurrente/cancelado"
+                    element={
+                        <RecurrenteCancelado />
+                    }
+                />
+
+                <Route
                     path="/visitas"
                     element={
                         <Visitas />
@@ -140,11 +149,7 @@ function App() {
                         <Contacto />
                     }
                 />
-
             </Route>
-
-
-            {/* LOGIN */}
 
             <Route
                 path="/login"
@@ -153,24 +158,17 @@ function App() {
                 }
             />
 
-
-            {/* ======================
-                PANEL PROTEGIDO
-            ====================== */}
-
             <Route
                 element={
                     <RutaProtegida />
                 }
             >
-
                 <Route
                     path="/panel"
                     element={
                         <PanelLayout />
                     }
                 >
-
                     <Route
                         index
                         element={
@@ -178,15 +176,12 @@ function App() {
                         }
                     />
 
-
                     <Route
                         path="publicaciones"
-
                         element={
                             <PublicacionesPanel />
                         }
                     />
-
 
                     <Route
                         path="necesidades"
@@ -195,7 +190,6 @@ function App() {
                         }
                     />
 
-
                     <Route
                         path="visitas"
                         element={
@@ -203,57 +197,49 @@ function App() {
                         }
                     />
 
-
                     <Route
                         path="voluntariado"
-
                         element={
                             <VoluntariadoPanel />
                         }
                     />
 
-
                     <Route
                         path="contenidos"
-
                         element={
                             <ContenidoPanel />
                         }
                     />
 
-
                     <Route
                         path="usuarios"
-
                         element={
                             <UsuariosPanel />
                         }
                     />
 
-
                     <Route
                         path="donaciones"
-
                         element={
                             <DonacionesPanel />
                         }
                     />
 
-
                     <Route
                         path="transacciones"
                         element={
-                            <TransaccionesPanel />
+                            <TransaccionesPanel proveedor="PayPal" />
                         }
                     />
 
+                    <Route
+                        path="transacciones-recurrente"
+                        element={<TransaccionesPanel proveedor="Recurrente" />}
+                    />
                 </Route>
-
             </Route>
-
         </Routes>
     );
 }
-
 
 export default App;

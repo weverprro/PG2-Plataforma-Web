@@ -1,6 +1,12 @@
 import {
+    useEffect,
+    useState
+} from "react";
+
+import {
     NavLink,
-    Outlet
+    Outlet,
+    useLocation
 } from "react-router";
 
 import {
@@ -15,6 +21,13 @@ function PanelLayout() {
         cerrarSesion
     } = useAuth();
 
+    const [
+        menuAbierto,
+        setMenuAbierto
+    ] = useState(false);
+
+    const ubicacion = useLocation();
+
 
     const rol =
         usuario?.rol ||
@@ -22,20 +35,87 @@ function PanelLayout() {
         "";
 
 
+    useEffect(() => {
+        setMenuAbierto(false);
+    }, [ubicacion.pathname]);
+
+
+    useEffect(() => {
+        document.body.style.overflow =
+            menuAbierto
+                ? "hidden"
+                : "";
+
+        return () => {
+            document.body.style.overflow = "";
+        };
+    }, [menuAbierto]);
+
+
+    function cerrarMenu() {
+        setMenuAbierto(false);
+    }
+
+
+    function manejarCerrarSesion() {
+        cerrarMenu();
+        cerrarSesion();
+    }
+
+
     return (
         <div className="panel-layout">
 
-            <aside className="panel-sidebar">
+            <button
+                type="button"
+                className={`panel-menu-toggle ${
+                    menuAbierto
+                        ? "panel-menu-toggle-oculto"
+                        : ""
+                }`}
+                aria-label="Abrir menú administrativo"
+                aria-expanded={menuAbierto}
+                onClick={() =>
+                    setMenuAbierto(true)
+                }
+            >
+                <span />
+                <span />
+                <span />
+            </button>
 
-                <div className="panel-logo">
 
-                    <strong>
-                        Mesón Buen Samaritano
-                    </strong>
+            <aside
+                className={`panel-sidebar ${
+                    menuAbierto
+                        ? "panel-sidebar-abierto"
+                        : ""
+                }`}
+            >
 
-                    <span>
-                        Administración
-                    </span>
+                <div className="panel-sidebar-superior">
+
+                    <div className="panel-logo">
+
+                        <strong>
+                            Mesón Buen Samaritano
+                        </strong>
+
+                        <span>
+                            Administración
+                        </span>
+
+                    </div>
+
+
+                    <button
+                        type="button"
+                        className="panel-sidebar-cerrar"
+                        aria-label="Cerrar menú administrativo"
+                        onClick={cerrarMenu}
+                    >
+                        ×
+                    </button>
 
                 </div>
 
@@ -124,29 +204,45 @@ function PanelLayout() {
                         rol ===
                             "Contador"
                     ) && (
-
+                        <>
                         <NavLink
                             to="/panel/transacciones"
                         >
                             Transacciones PayPal
                         </NavLink>
-
+                        <NavLink
+                            to="/panel/transacciones-recurrente"
+                        >
+                            Transacciones Recurrente
+                        </NavLink>
+                        </>
                     )}
 
                 </nav>
 
 
-                <button
-                    className="cerrar-sesion"
-
-                    onClick={
-                        cerrarSesion
-                    }
-                >
-                    Cerrar sesión
-                </button>
+                <div className="panel-sidebar-pie">
+                    <button
+                        className="cerrar-sesion"
+                        onClick={
+                            manejarCerrarSesion
+                        }
+                    >
+                        Cerrar sesión
+                    </button>
+                </div>
 
             </aside>
+
+
+            {menuAbierto && (
+                <button
+                    type="button"
+                    className="panel-menu-capa"
+                    aria-label="Cerrar menú administrativo"
+                    onClick={cerrarMenu}
+                />
+            )}
 
 
             <section className="panel-contenido">

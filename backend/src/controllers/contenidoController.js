@@ -2,6 +2,7 @@ const pool = require("../config/database");
 const cloudinary = require("../config/cloudinary");
 
 const tiposPermitidos = [
+    "HeroInicio",
     "QuienesSomos",
     "Historia",
     "Mision",
@@ -292,9 +293,22 @@ async function crearContenido(
             imagenPublicId = null,
             orden = 1 } = req.body;
 
+        const esHeroInicio =
+            tipoContenido === "HeroInicio";
+
+        const tituloFinal =
+            esHeroInicio
+                ? "Imagen principal de inicio"
+                : titulo;
+
+        const contenidoFinal =
+            esHeroInicio
+                ? "Imagen utilizada como fondo del encabezado principal de la página de inicio."
+                : contenido;
+
         if (
-            !titulo ||
-            !contenido ||
+            !tituloFinal ||
+            !contenidoFinal ||
             !tipoContenido
         ) {
             return res
@@ -381,8 +395,8 @@ async function crearContenido(
                 )
                 VALUES (?, ?, ?, ?, ?, TRUE, ?, ?)`,
                 [
-                    titulo,
-                    contenido,
+                    tituloFinal,
+                    contenidoFinal,
                     tipoContenido,
                     imagenUrl || null,
                     imagenPublicId || null,
@@ -429,9 +443,22 @@ async function actualizarContenido(
             imagenPublicId = null,
             orden = 1} = req.body;
 
+        const esHeroInicio =
+            tipoContenido === "HeroInicio";
+
+        const tituloFinal =
+            esHeroInicio
+                ? "Imagen principal de inicio"
+                : titulo;
+
+        const contenidoFinal =
+            esHeroInicio
+                ? "Imagen utilizada como fondo del encabezado principal de la página de inicio."
+                : contenido;
+
         if (
-            !titulo ||
-            !contenido ||
+            !tituloFinal ||
+            !contenidoFinal ||
             !tipoContenido
         ) {
             return res
@@ -580,8 +607,8 @@ async function actualizarContenido(
                 id_usuario = ?
              WHERE id_contenido = ?`,
             [
-                titulo,
-                contenido,
+                tituloFinal,
+                contenidoFinal,
                 tipoContenido,
                 imagenUrl || null,
                 publicIdFinal,
