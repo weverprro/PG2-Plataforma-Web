@@ -76,6 +76,7 @@ function PublicacionCard({
             </p>
 
 
+            {!(publicacion.video_url && publicacion.video_modo === "Enlace") && (
             <GaleriaPublicacion
 
                 imagenes={
@@ -90,6 +91,7 @@ function PublicacionCard({
                     mostrarCompleta
                 }
             />
+            )}
 
 
             {publicacion.video_url && (

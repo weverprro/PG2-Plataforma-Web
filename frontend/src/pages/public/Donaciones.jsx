@@ -443,6 +443,51 @@ function Donaciones() {
                             </>
                         )}
                     </div>
+
+                    
+                    <div className="donaciones-cuenta">
+                        <strong>¿Prefieres ayudarnos mediante una cuenta bancaria?</strong>
+
+                        <p>
+                            Cada aporte nos ayuda a seguir brindando cuidado,
+                            alimentación y cariño a nuestros abuelitos.
+                            Si lo deseas, también puedes colaborar haciendo
+                            un depósito o transferencia a nuestra cuenta.
+                        </p>
+
+                        <span className="donaciones-cuenta-etiqueta">
+                            Banco
+                        </span>
+                        <p className="donaciones-cuenta-titular">
+                            Banrural — Cuenta monetaria
+                        </p>
+
+                        <span className="donaciones-cuenta-etiqueta">
+                            Número de cuenta
+                        </span>
+                        <div className="donaciones-cuenta-numero">
+                            <strong>3364088840</strong>
+                            <button
+                                type="button"
+                                onClick={() => navigator.clipboard?.writeText("3364088840")}
+                                aria-label="Copiar número de cuenta"
+                            >
+                                Copiar
+                            </button>
+                        </div>
+
+                        <span className="donaciones-cuenta-etiqueta">
+                            A nombre de
+                        </span>
+                        <p className="donaciones-cuenta-titular">
+                            Asociación Civil Mesón Buen Samaritano
+                        </p>
+
+                        <small>
+                            Gracias por ser parte de esta hermosa labor.
+                            Tu generosidad hace una gran diferencia.
+                        </small>
+                    </div>
                 </div>
 
                 {/* FORMULARIO */}
@@ -573,7 +618,7 @@ function Donaciones() {
                                         }
                                     >
                                         <strong>
-                                            Recurrente
+                                            Tarjeta de crédito o débito
                                         </strong>
 
                                         <span>
@@ -666,7 +711,7 @@ function Donaciones() {
                                     ? "Procesando..."
                                     : tipo === "Monetaria"
                                         ? metodoPago === "Recurrente"
-                                            ? "Continuar con Recurrente"
+                                            ? "Pagar con tarjeta"
                                             : "Continuar con PayPal"
                                         : "Registrar donación"
                             }
